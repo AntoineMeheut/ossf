@@ -172,3 +172,11 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# IDE configurations
+.idea
+.vscode
+
+# Misc
+assets/js/dist
+.DS_Store

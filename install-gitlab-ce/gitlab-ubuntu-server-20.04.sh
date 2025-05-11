@@ -1,7 +1,7 @@
 #!/bin/bash
 # Unattended GitLab Installation for Ubuntu Server 20.04 64-Bit
 # Maintainer: github.contacts@protonmail.com
-# GitLab Version: sonarqube-9.9.8.100196
+# GitLab Version: 17-9 stable
 # PostgreSQL Version: postgresql-9.1
 #
 # This script installs GitLab server on Ubuntu Server 20.04 with all dependencies.
@@ -155,7 +155,7 @@ sudo -u $APP_USER -H ./bin/install
 #
 echo -e "\n*== Installing GitLab...\n"
 cd $USER_ROOT
-sudo -u $APP_USER -H git clone https://gitlab.com/gitlab-org/gitlab-ce.git -b 9-8-stable gitlab
+sudo -u $APP_USER -H git clone https://gitlab.com/gitlab-org/gitlab-ce.git -b 17-9-stable gitlab
 cd $APP_ROOT
 sudo -u $APP_USER -H cp $APP_ROOT/config/gitlab.yml.example $APP_ROOT/config/gitlab.yml
 sudo sed -i "s/host: localhost/host: ${DOMAIN_VAR}/" $APP_ROOT/config/gitlab.yml

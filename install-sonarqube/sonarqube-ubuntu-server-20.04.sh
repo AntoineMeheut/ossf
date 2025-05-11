@@ -1,8 +1,8 @@
 #!/bin/bash
-# Unattended GitLab Installation for Ubuntu Server 12.04 and 13.04 64-Bit
+# Unattended GitLabrqube Installation for Ubuntu Server 20.04 64-Bit
 #
 # Maintainer: @caseyscarborough
-# GitLab Version: 6.7
+# Sonarqube Version: 6.7
 #
 # This script installs GitLab server on Ubuntu Server 12.04 or 13.04 with all dependencies.
 #

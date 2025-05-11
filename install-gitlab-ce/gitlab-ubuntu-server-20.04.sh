@@ -8,14 +8,14 @@
 #
 # INFORMATION
 # Distribution      : Ubuntu 20.04 64-Bit
-# GitLab Version    : sonarqube-9.9.8.100196
+# GitLab Version    : 17-9 stable
 # Web Server        : Nginx
 # Init System       : systemd
 # Database          : PostgreSQL
 #
 # USAGE
 #   wget -O ~/gitlab-ubuntu-server-20.04.sh https://github.com/AntoineMeheut/ossf/blob/main/install-gitlab-ce/gitlab-ubuntu-server-20.04.sh
-#   sudo bash ~/gitlab-ubuntu-server-20.04.sh -d gitlab.example.com (--mysql OR --postgresql)
+#   sudo bash ~/gitlab-ubuntu-server-20.04.sh -d gitlab.ame.tech
 
 help_menu ()
 {
@@ -102,14 +102,14 @@ DB_USER_PASSWORD=$(makepasswd --char=25)
 ##
 # Download and compile Ruby
 #
-#echo -e "\n*== Downloading and configuring Ruby...\n"
-#mkdir -p /tmp/ruby && cd /tmp/ruby
-#curl --progress ftp://ftp.ruby-lang.org/pub/ruby/2.0/ruby-2.0.0-p353.tar.gz | tar xz
-#cd ruby-2.0.0-p353
-#./configure --disable-install-rdoc
-#make
-#sudo make install
-#sudo gem install bundler --no-ri --no-rdoc
+echo -e "\n*== Downloading and configuring Ruby...\n"
+mkdir -p /tmp/ruby && cd /tmp/ruby
+curl --progress ftp://ftp.ruby-lang.org/pub/ruby/2.0/ruby-2.0.0-p353.tar.gz | tar xz
+cd ruby-2.0.0-p353
+./configure --disable-install-rdoc
+make
+sudo make install
+sudo gem install bundler --no-ri --no-rdoc
 
 # Add the git user.
 sudo adduser --disabled-login --gecos 'GitLab' $APP_USER

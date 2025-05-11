@@ -1,15 +1,15 @@
 #!/bin/bash
 # Unattended GitLab Installation for Ubuntu Server 20.04 64-Bit
 # Maintainer: github.contacts@protonmail.com
-# GitLab Version: 17-9 stable
-# PostgreSQL Version: postgresql-9.1
+# GitLab Version: last
+# PostgreSQL Version: last
 #
 # This script installs GitLab server on Ubuntu Server 20.04 with all dependencies.
 #
 # INFORMATION
 # Distribution      : Ubuntu 20.04 64-Bit
-# GitLab Version    : 17-9 stable
-# Web Server        : Nginx
+# GitLab Version    : last
+# Web Server        : postfix
 # Init System       : systemd
 # Database          : PostgreSQL
 #
@@ -27,7 +27,6 @@ help_menu ()
 # Set the application user and home directory.
 APP_USER=git
 USER_ROOT=/home/$APP_USER
-DATABASE_TYPE="PostgreSQL"
 
 # Set the application root.
 APP_ROOT=$USER_ROOT/gitlab
@@ -87,13 +86,7 @@ sudo apt-get upgrade -y
 # Installing dependencies
 #
 echo -e "\n*== Installing dependencies...\n"
-sudo apt-get install -y build-essential makepasswd zlib1g-dev libyaml-dev libssl-dev libgdbm-dev libreadline-dev libncurses5-dev libffi-dev curl git-core openssh-server redis-server checkinstall libxml2-dev libxslt-dev libcurl4-openssl-dev libicu-dev python-docutils python-software-properties sendmail logrotate
-
-##
-# Installing open-jdk-17
-#
-echo -e "\n*== Installing open-jdk-17...\n"
-sudo apt-get install -y open-jdk-17
+sudo apt-get install -y curl openssh-server ca-certificates tzdata perl postfix
 
 # Generate passwords for MySQL root and gitlab users.
 MYSQL_ROOT_PASSWORD=$(makepasswd --char=25)

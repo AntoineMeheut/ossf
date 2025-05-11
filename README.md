@@ -100,7 +100,7 @@ sudo apt-mark hold gitlab-ce
 
 ### Vérifier la version fixée
 ```sh
-sudo apt-mark showhold
+exit
 ```
 
 ### Configurer gitlab-ce

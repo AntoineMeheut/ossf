@@ -14,7 +14,7 @@
 # Database          : PostgreSQL
 #
 # USAGE
-#   wget -O ~/gitlab-ubuntu-server-20.04.sh https://github.com/AntoineMeheut/ossf/blob/main/install-gitlab-ce/gitlab-ubuntu-server-20.04.sh
+#   wget -O ~/gitlab-ubuntu-server-20.04.sh https://raw.githubusercontent.com/AntoineMeheut/ossf/refs/heads/main/install-gitlab-ce/gitlab-ubuntu-server-20.04.sh
 #   sudo bash ~/gitlab-ubuntu-server-20.04.sh -d gitlab.ame.tech
 
 help_menu ()

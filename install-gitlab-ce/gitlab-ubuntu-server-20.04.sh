@@ -2,6 +2,7 @@
 # Unattended GitLab Installation for Ubuntu Server 20.04 64-Bit
 # Maintainer: github.contacts@protonmail.com
 # GitLab Version: sonarqube-9.9.8.100196
+# PostgreSQL Version: postgresql-9.1
 #
 # This script installs GitLab server on Ubuntu Server 20.04 with all dependencies.
 #
@@ -10,19 +11,17 @@
 # GitLab Version    : sonarqube-9.9.8.100196
 # Web Server        : Nginx
 # Init System       : systemd
-# Database          : PostgreSQL (default) or MySQL
+# Database          : PostgreSQL
 #
 # USAGE
-#   wget -O ~/gitlab-ubuntu-server-20.04.sh https://raw.github.com/caseyscarborough/gitlab-install/master/ubuntu-server-12.04.sh
+#   wget -O ~/gitlab-ubuntu-server-20.04.sh https://github.com/AntoineMeheut/ossf/blob/main/install-gitlab-ce/gitlab-ubuntu-server-20.04.sh
 #   sudo bash ~/gitlab-ubuntu-server-20.04.sh -d gitlab.example.com (--mysql OR --postgresql)
 
 help_menu ()
 {
-  echo "Usage: $0 -d DOMAIN_VAR (-m|--mysql)|(-p|--postgresql)"
+  echo "Usage: $0 -d DOMAIN_VAR "
   echo "  -h,--help        Display this usage menu"
   echo "  -d,--domain-var  Set the domain variable for GitLab, e.g. gitlab.example.com"
-  echo "  -p,--postgresql  Use PostgreSQL as the database (default)"
-  echo "  -m,--mysql       Use MySQL as the database (not recommended)"
 }
 
 # Set the application user and home directory.
@@ -51,14 +50,6 @@ while test $# -gt 0; do
       fi
       shift
       ;;
-    -m|--mysql)
-      shift
-      DATABASE_TYPE="MySQL"
-      ;;
-    -p|--postgresql)
-      shift
-      DATABASE_TYPE="PostgreSQL"
-      ;;
     *)
       echo "Unknown argument: $1"
       exit 1
@@ -85,13 +76,24 @@ else
   exit 1
 fi
 
-## 
-# Installing Packages
+##
+# Ubuntu update & upgrade
 #
-echo -e "\n*== Installing new packages...\n"
+echo -e "\n*== Ubuntu update & upgrade...\n"
 sudo apt-get update -y 2>&1 >/dev/null
 sudo apt-get upgrade -y
+
+##
+# Installing dependencies
+#
+echo -e "\n*== Installing dependencies...\n"
 sudo apt-get install -y build-essential makepasswd zlib1g-dev libyaml-dev libssl-dev libgdbm-dev libreadline-dev libncurses5-dev libffi-dev curl git-core openssh-server redis-server checkinstall libxml2-dev libxslt-dev libcurl4-openssl-dev libicu-dev python-docutils python-software-properties sendmail logrotate
+
+##
+# Installing open-jdk-17
+#
+echo -e "\n*== Installing open-jdk-17...\n"
+sudo apt-get install -y open-jdk-17
 
 # Generate passwords for MySQL root and gitlab users.
 MYSQL_ROOT_PASSWORD=$(makepasswd --char=25)
@@ -100,48 +102,26 @@ DB_USER_PASSWORD=$(makepasswd --char=25)
 ##
 # Download and compile Ruby
 #
-echo -e "\n*== Downloading and configuring Ruby...\n"
-mkdir -p /tmp/ruby && cd /tmp/ruby
-curl --progress ftp://ftp.ruby-lang.org/pub/ruby/2.0/ruby-2.0.0-p353.tar.gz | tar xz
-cd ruby-2.0.0-p353
-./configure --disable-install-rdoc
-make
-sudo make install
-sudo gem install bundler --no-ri --no-rdoc
+#echo -e "\n*== Downloading and configuring Ruby...\n"
+#mkdir -p /tmp/ruby && cd /tmp/ruby
+#curl --progress ftp://ftp.ruby-lang.org/pub/ruby/2.0/ruby-2.0.0-p353.tar.gz | tar xz
+#cd ruby-2.0.0-p353
+#./configure --disable-install-rdoc
+#make
+#sudo make install
+#sudo gem install bundler --no-ri --no-rdoc
 
 # Add the git user.
 sudo adduser --disabled-login --gecos 'GitLab' $APP_USER
 
-if test $DATABASE_TYPE == "MySQL"; then
-  ##
-  # MySQL Installation
-  # 
-  echo -e "\n*== Installing MySQL Server...\n"
-  echo mysql-server mysql-server/root_password password $MYSQL_ROOT_PASSWORD | sudo debconf-set-selections
-  echo mysql-server mysql-server/root_password_again password $MYSQL_ROOT_PASSWORD | sudo debconf-set-selections
-  sudo apt-get install -y mysql-server mysql-client libmysqlclient-dev
+##
+# PostgreSQL Installation
+#
+sudo apt-get install -y postgresql-9.1 postgresql-client libpq-dev
 
-  # Secure the MySQL installation and add GitLab user and database.
-  sudo echo -e "GRANT USAGE ON *.* TO ''@'localhost';
-  DROP USER ''@'localhost';
-  DROP DATABASE IF EXISTS test;
-  CREATE USER 'git'@'localhost' IDENTIFIED BY '$DB_USER_PASSWORD';
-  CREATE DATABASE IF NOT EXISTS gitlabhq_production DEFAULT CHARACTER SET utf8 COLLATE utf8_unicode_ci;
-  GRANT SELECT, LOCK TABLES, INSERT, UPDATE, DELETE, CREATE, DROP, INDEX, ALTER ON gitlabhq_production.* TO 'git'@'localhost';
-  " > /tmp/gitlab.sql
-  mysql -u root -p$MYSQL_ROOT_PASSWORD -e "SOURCE /tmp/gitlab.sql"
-
-  sudo rm /tmp/gitlab.sql
-else
-  ##
-  # PostgreSQL Installation
-  #
-  sudo apt-get install -y postgresql-9.1 postgresql-client libpq-dev
-
-  # Create user and database.
-  sudo -u postgres psql -c "CREATE USER git WITH PASSWORD '$DB_USER_PASSWORD';"
-  sudo -u postgres psql -c "CREATE DATABASE gitlabhq_production OWNER git;"
-fi
+# Create user and database.
+sudo -u postgres psql -c "CREATE USER git WITH PASSWORD '$DB_USER_PASSWORD';"
+sudo -u postgres psql -c "CREATE DATABASE gitlabhq_production OWNER git;"
 
 ##
 # Update Git
@@ -175,20 +155,14 @@ sudo -u $APP_USER -H ./bin/install
 #
 echo -e "\n*== Installing GitLab...\n"
 cd $USER_ROOT
-sudo -u $APP_USER -H git clone https://gitlab.com/gitlab-org/gitlab-ce.git -b 6-7-stable gitlab
+sudo -u $APP_USER -H git clone https://gitlab.com/gitlab-org/gitlab-ce.git -b 9-8-stable gitlab
 cd $APP_ROOT
 sudo -u $APP_USER -H cp $APP_ROOT/config/gitlab.yml.example $APP_ROOT/config/gitlab.yml
 sudo sed -i "s/host: localhost/host: ${DOMAIN_VAR}/" $APP_ROOT/config/gitlab.yml
 
-if test $DATABASE_TYPE == 'MySQL'; then
-  sudo -u $APP_USER cp $APP_ROOT/config/database.yml.mysql $APP_ROOT/config/database.yml
-  sudo sed -i 's/username: root/username: gitlab/' $APP_ROOT/config/database.yml
-  sudo sed -i 's/"secure password"/"'$DB_USER_PASSWORD'"/' $APP_ROOT/config/database.yml
-else
-  sudo -u $APP_USER cp $APP_ROOT/config/database.yml.postgresql $APP_ROOT/config/database.yml
-  sudo sed -i 's/# username: git/username: git/' $APP_ROOT/config/database.yml
-  sudo sed -i "s/# password:/password: '$DB_USER_PASSWORD'/" $APP_ROOT/config/database.yml
-fi
+sudo -u $APP_USER cp $APP_ROOT/config/database.yml.postgresql $APP_ROOT/config/database.yml
+sudo sed -i 's/# username: git/username: git/' $APP_ROOT/config/database.yml
+sudo sed -i "s/# password:/password: '$DB_USER_PASSWORD'/" $APP_ROOT/config/database.yml
 
 sudo -u $APP_USER -H chmod o-rwx $APP_ROOT/config/database.yml
 
@@ -223,11 +197,7 @@ sudo chmod -R u+rwX public/uploads
 echo -e "\n*== Installing required gems...\n"
 cd $APP_ROOT
 
-if test $DATABASE_TYPE == 'MySQL'; then
-  sudo -u $APP_USER -H bundle install --deployment --without development test postgres aws
-else
-  sudo -u $APP_USER -H bundle install --deployment --without development test mysql aws
-fi
+sudo -u $APP_USER -H bundle install --deployment --without development test mysql aws
 
 ##
 # Run setup and add startup script.
@@ -264,11 +234,7 @@ echo -e "\n*== Starting Gitlab!\n"
 sudo service gitlab start
 sudo service nginx restart
 
-if test $DATABASE_TYPE == 'MySQL'; then
-  sudo echo -e "root: $MYSQL_ROOT_PASSWORD\ngitlab: $DB_USER_PASSWORD" > $APP_ROOT/config/mysql.yml
-else
-  sudo echo -e "git: $DB_USER_PASSWORD" > $APP_ROOT/config/postgresql.yml
-fi
+sudo echo -e "git: $DB_USER_PASSWORD" > $APP_ROOT/config/postgresql.yml
 
 # Double check application status
 sudo -u $APP_USER -H bundle exec rake gitlab:check RAILS_ENV=production
@@ -282,15 +248,10 @@ echo -e " Login with the default credentials:"
 echo -e "   admin@local.host"
 echo -e "   5iveL!fe\n"
 
-if test $DATABASE_TYPE == 'MySQL'; then
-  echo -e " Your MySQL username and passwords are located in the following file:"
-  echo -e "   $APP_ROOT/config/mysql.yml\n"
-else
-  echo -e " Your PostgreSQL username and password is located in the following file:"
-  echo -e "   $APP_ROOT/config/postgresql.yml\n"
-fi
+echo -e " Your PostgreSQL username and password is located in the following file:"
+echo -e "   $APP_ROOT/config/postgresql.yml\n"
 
-echo -e " Script written by Casey Scarborough, 2014."
-echo -e " https://github.com/caseyscarborough\n"
+echo -e " Script written by Antoine Meheut, 2025."
+echo -e " https://github.com/AntoineMeheut\n"
 
 echo -e "*==================================================================*"

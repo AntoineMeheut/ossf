@@ -70,7 +70,7 @@ The second machine contains:
 - Sonarqube for code quality and security analysis.
 
 Everything is orchestrated by pipelines in Gitlab.
-
+https://dev.to/henri_sekeladi/install-gitlab-ce-on-ubuntu-server-2404-5d4n
 <!-- SOFTWARE FACTORY INSTALLATION -->
 ## Gitlab CE installation
 ### Mettre à jour votre instance ubuntu

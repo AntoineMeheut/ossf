@@ -88,50 +88,7 @@ sudo apt-get upgrade -y
 echo -e "\n*== Installing dependencies...\n"
 sudo apt-get install -y curl openssh-server ca-certificates tzdata perl postfix
 
-# Generate passwords for MySQL root and gitlab users.
-MYSQL_ROOT_PASSWORD=$(makepasswd --char=25)
-DB_USER_PASSWORD=$(makepasswd --char=25)
-
-# Add the git user.
-sudo adduser --disabled-login --gecos 'GitLab' $APP_USER
-
 ##
-# PostgreSQL Installation
-#
-sudo apt-get install -y postgresql-9.1 postgresql-client libpq-dev
-
-# Create user and database.
-sudo -u postgres psql -c "CREATE USER git WITH PASSWORD '$DB_USER_PASSWORD';"
-sudo -u postgres psql -c "CREATE DATABASE gitlabhq_production OWNER git;"
-
-##
-# Update Git
-#
-echo -e "\n*== Updating Git...\n"
-sudo add-apt-repository -y ppa:git-core/ppa
-sudo apt-get update -y
-sudo apt-get install -y git
-
-##
-# Set up the Git configuration.
-#
-echo -e "\n*== Configuring Git...\n"
-sudo -u $APP_USER -H git config --global user.name "GitLab"
-sudo -u $APP_USER -H git config --global user.email "gitlab@localhost"
-sudo -u $APP_USER -H git config --global core.autocrlf input
-
-## 
-# Install GitLab Shell
-#
-echo -e "\n*== Installing GitLab Shell...\n"
-cd $USER_ROOT
-sudo -u $APP_USER -H git clone https://gitlab.com/gitlab-org/gitlab-shell.git -b v1.9.1
-cd gitlab-shell
-sudo -u $APP_USER -H cp config.yml.example config.yml
-sudo sed -i "s/localhost/$DOMAIN_VAR/" /home/git/gitlab-shell/config.yml
-sudo -u $APP_USER -H ./bin/install
-
-## 
 # Install GitLab
 #
 echo -e "\n*== Installing GitLab...\n"
@@ -139,63 +96,18 @@ cd $USER_ROOT
 sudo curl https://packages.gitlab.com/install/repositories/gitlab/gitlab-ce/script.deb.sh | sudo bash
 sudo apt-get install gitlab-ce
 sudo apt-mark hold gitlab-ce
-cd $APP_ROOT
-sudo -u $APP_USER -H cp $APP_ROOT/config/gitlab.yml.example $APP_ROOT/config/gitlab.yml
-sudo sed -i "s/host: localhost/host: ${DOMAIN_VAR}/" $APP_ROOT/config/gitlab.yml
-
-sudo -u $APP_USER cp $APP_ROOT/config/database.yml.postgresql $APP_ROOT/config/database.yml
-sudo sed -i 's/# username: git/username: git/' $APP_ROOT/config/database.yml
-sudo sed -i "s/# password:/password: '$DB_USER_PASSWORD'/" $APP_ROOT/config/database.yml
-
-sudo -u $APP_USER -H chmod o-rwx $APP_ROOT/config/database.yml
-
-# Copy the example Unicorn config
-sudo -u $APP_USER -H cp $APP_ROOT/config/unicorn.rb.example $APP_ROOT/config/unicorn.rb
-
-# Set the timeout to 300
-sudo sed -i 's/timeout 30/timeout 300/' $APP_ROOT/config/unicorn.rb
-sudo sed -i 's/error_log   /var/log/nginx/gitlab_error.log;/error_log   /var/log/nginx/gitlab_error.log;\n\nproxy_connect_timeout 300;\nproxy_read_timeout 300;/' /etc/nginx/sites-available/gitlab
-
-# Copy the example Rack attack config
-sudo -u $APP_USER -H cp $APP_ROOT/config/initializers/rack_attack.rb.example $APP_ROOT/config/initializers/rack_attack.rb
 
 ##
-# Update permissions.
+# Modify gitlab url
 #
-echo -e "\n*== Updating permissions...\n"
-sudo -u $APP_USER -H mkdir tmp/pids/
-sudo -u $APP_USER -H mkdir tmp/sockets/
-sudo -u $APP_USER -H mkdir public/uploads
-sudo chown -R $APP_USER log/
-sudo chown -R $APP_USER tmp/
-sudo chmod -R u+rwX log/
-sudo chmod -R u+rwX tmp/
-sudo chmod -R u+rwX tmp/pids/
-sudo chmod -R u+rwX tmp/sockets/
-sudo chmod -R u+rwX public/uploads
+echo -e "\n*== Modify gitlab url...\n"
+sudo nano /etc/gitlab/gitlab.rb
 
 ##
-# Run setup and add startup script.
+# Reconfigure Gitlab
 #
-sudo sed -i 's/ask_to_continue/# ask_to_continue/' $APP_ROOT/lib/tasks/gitlab/setup.rake
-sudo -u $APP_USER -H bundle exec rake gitlab:setup RAILS_ENV=production
-sudo sed -i 's/# ask_to_continue/ask_to_continue/' $APP_ROOT/lib/tasks/gitlab/setup.rake
-
-sudo cp $APP_ROOT/lib/support/init.d/gitlab /etc/init.d/gitlab
-sudo chmod +x /etc/init.d/gitlab
-sudo update-rc.d gitlab defaults 21
-
-# Setup logrotate
-sudo cp $APP_ROOT/lib/support/logrotate/gitlab /etc/logrotate.d/gitlab
-
-# Check application status
-sudo -u $APP_USER -H bundle exec rake gitlab:env:info RAILS_ENV=production
-
-# Start GitLab and Nginx!
-echo -e "\n*== Starting Gitlab!\n"
-sudo service gitlab start
-
-sudo echo -e "git: $DB_USER_PASSWORD" > $APP_ROOT/config/postgresql.yml
+echo -e "\n*== Reconfigure Gitlab...\n"
+sudo gitlab-ctl reconfigure
 
 # Double check application status
 sudo -u $APP_USER -H bundle exec rake gitlab:check RAILS_ENV=production

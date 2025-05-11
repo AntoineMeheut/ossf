@@ -98,11 +98,6 @@ sudo apt-get install gitlab-ce
 sudo apt-mark hold gitlab-ce
 ```
 
-### Vérifier la version fixée
-```sh
-exit
-```
-
 ### Configurer gitlab-ce
 ```sh
 sudo nano /etc/gitlab/gitlab.rb

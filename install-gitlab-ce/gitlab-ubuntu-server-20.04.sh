@@ -1,14 +1,14 @@
 #!/bin/bash
 # Unattended GitLab Installation for Ubuntu Server 20.04 64-Bit
 # Maintainer: github.contacts@protonmail.com
-# GitLab Version: last
-# PostgreSQL Version: last
+# GitLab Version: latest version
+# PostgreSQL Version: latest version
 #
 # This script installs GitLab server on Ubuntu Server 20.04 with all dependencies.
 #
 # INFORMATION
 # Distribution      : Ubuntu 20.04 64-Bit
-# GitLab Version    : last
+# GitLab Version    : latest version
 # Web Server        : postfix
 # Init System       : systemd
 # Database          : PostgreSQL
@@ -92,18 +92,6 @@ sudo apt-get install -y curl openssh-server ca-certificates tzdata perl postfix
 MYSQL_ROOT_PASSWORD=$(makepasswd --char=25)
 DB_USER_PASSWORD=$(makepasswd --char=25)
 
-##
-# Download and compile Ruby
-#
-echo -e "\n*== Downloading and configuring Ruby...\n"
-mkdir -p /tmp/ruby && cd /tmp/ruby
-curl --progress ftp://ftp.ruby-lang.org/pub/ruby/2.0/ruby-2.0.0-p353.tar.gz | tar xz
-cd ruby-2.0.0-p353
-./configure --disable-install-rdoc
-make
-sudo make install
-sudo gem install bundler --no-ri --no-rdoc
-
 # Add the git user.
 sudo adduser --disabled-login --gecos 'GitLab' $APP_USER
 
@@ -148,7 +136,9 @@ sudo -u $APP_USER -H ./bin/install
 #
 echo -e "\n*== Installing GitLab...\n"
 cd $USER_ROOT
-sudo -u $APP_USER -H git clone https://gitlab.com/gitlab-org/gitlab-ce.git -b 17-9-stable gitlab
+sudo curl https://packages.gitlab.com/install/repositories/gitlab/gitlab-ce/script.deb.sh | sudo bash
+sudo apt-get install gitlab-ce
+sudo apt-mark hold gitlab-ce
 cd $APP_ROOT
 sudo -u $APP_USER -H cp $APP_ROOT/config/gitlab.yml.example $APP_ROOT/config/gitlab.yml
 sudo sed -i "s/host: localhost/host: ${DOMAIN_VAR}/" $APP_ROOT/config/gitlab.yml
@@ -185,14 +175,6 @@ sudo chmod -R u+rwX tmp/sockets/
 sudo chmod -R u+rwX public/uploads
 
 ##
-# Install required Gems.
-#
-echo -e "\n*== Installing required gems...\n"
-cd $APP_ROOT
-
-sudo -u $APP_USER -H bundle install --deployment --without development test mysql aws
-
-##
 # Run setup and add startup script.
 #
 sudo sed -i 's/ask_to_continue/# ask_to_continue/' $APP_ROOT/lib/tasks/gitlab/setup.rake
@@ -209,23 +191,9 @@ sudo cp $APP_ROOT/lib/support/logrotate/gitlab /etc/logrotate.d/gitlab
 # Check application status
 sudo -u $APP_USER -H bundle exec rake gitlab:env:info RAILS_ENV=production
 
-##
-# Nginx installation
-#
-echo -e "\n*== Installing Nginx...\n"
-sudo apt-get install -y nginx
-sudo cp $APP_ROOT/lib/support/nginx/gitlab /etc/nginx/sites-available/gitlab
-sudo ln -s /etc/nginx/sites-available/gitlab /etc/nginx/sites-enabled/gitlab
-sudo sed -i "s/YOUR_SERVER_FQDN/${DOMAIN_VAR}/" /etc/nginx/sites-available/gitlab
-sudo sed -i "s/127.0.0.1\tlocalhost/127.0.0.1\tlocalhost\n127.0.0.1\t${DOMAIN_VAR}/" /etc/hosts
-
-# Set timeout to 300
-sudo sed -i 's/gitlab_error.log;/gitlab_error.log;\n\n  proxy_connect_timeout 300;\n  proxy_read_timeout 300;/' /etc/nginx/sites-available/gitlab
-
 # Start GitLab and Nginx!
 echo -e "\n*== Starting Gitlab!\n"
 sudo service gitlab start
-sudo service nginx restart
 
 sudo echo -e "git: $DB_USER_PASSWORD" > $APP_ROOT/config/postgresql.yml
 

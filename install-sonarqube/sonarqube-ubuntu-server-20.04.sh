@@ -40,9 +40,9 @@ run_command() {
 # Start of installation
 #
 # Check for domain variable.
-run_command log "*==================================================================*\n" && echo -e "*==================================================================*\n"
-run_command log " Sonarqube Installation has begun!\n" && echo -e " Sonarqube Installation has begun!\n"
-run_command log "*==================================================================*\n" && echo -e "*==================================================================*\n"
+run_command log "*==================================================================*" && echo -e "*==================================================================*"
+run_command log " Sonarqube Installation has begun!" && echo -e " Sonarqube Installation has begun!"
+run_command log "*==================================================================*" && echo -e "*==================================================================*"
 
 # Changing the Hostname of server to sonar
 run_command log "Setting the hostname to sonar..." && sudo hostnamectl set-hostname sonar
@@ -52,7 +52,7 @@ run_command log "Updating packages..." && sudo apt update -y
 run_command log "Upgrading packages..." && sudo apt upgrade -y
 
 # Configure ElasticSearch
-run_command log "Configuring ElasticSearch...\n" && echo -e "Configuring ElasticSearch...\n"
+run_command log "Configuring ElasticSearch..." && echo -e "Configuring ElasticSearch..."
 run_command sudo sh -c 'echo "vm.max_map_count=262144" >> /etc/sysctl.conf'
 run_command sudo sh -c 'echo "fs.file-max=65536" >> /etc/sysctl.conf'
 run_command sudo sh -c 'echo "ulimit -n 65536" >> /etc/sysctl.conf'
@@ -67,7 +67,7 @@ log "Downloading and adding PostgreSQL repository key..."
 run_command wget -qO- https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add - &>/dev/null
 
 # Install PostgreSQL
-run_command log "Installing PostgreSQL...\n" && echo -e "Installing PostgreSQL...\n"
+run_command log "Installing PostgreSQL..." && echo -e "Installing PostgreSQL..."
 run_command sudo apt-get -y install postgresql postgresql-contrib
 
 # Start and enable PostgreSQL
@@ -88,11 +88,11 @@ run_command sudo -u postgres bash <<EOF
 EOF
 
 # Install Java 17
-run_command log "Installing Java 17...\n" && echo -e "Installing Java 17...\n"
+run_command log "Installing Java 17..." && echo -e "Installing Java 17..."
 run_command sudo apt-get install openjdk-17-jdk openjdk-17-jre -y
 
 # Download and extract SonarQube
-run_command log "Installing Sonarqube...\n" && echo -e "Installing Sonarqube...\n"
+run_command log "Installing Sonarqube..." && echo -e "Installing Sonarqube..."
 log "Downloading and extracting SonarQube..."
 run_command sudo wget -q https://binaries.sonarsource.com/Distribution/sonarqube/sonarqube-9.9.4.87374.zip -P /opt/
 run_command sudo apt-get -y install unzip
@@ -102,8 +102,8 @@ run_command sudo mv /opt/sonarqube-9.9.4.87374/ /opt/sonarqube
 
 # Create SonarQube user and set permissions
 log "Creating user sonar and group sonar..."
-run_command sudo groupadd sonar
-run_command sudo useradd -c "sonar" -d /opt/sonarqube -g sonar sonar
+#run_command sudo groupadd sonar
+#run_command sudo useradd -c "sonar" -d /opt/sonarqube -g sonar sonar
 run_command sudo chown sonar:sonar /opt/sonarqube -R
 
 # Configure SonarQube properties
@@ -146,4 +146,4 @@ log "Starting and enabling SonarQube service..."
 run_command sudo systemctl enable --now sonar
 
 # Final message
-run_command log "SonarQube successfully installed. Access it via http://your_server_ip:9000.\n" && echo -e "SonarQube successfully installed. Access it via http://your_server_ip:9000.\n"
+run_command log "SonarQube successfully installed. Access it via http://your_server_ip:9000." && echo -e "SonarQube successfully installed. Access it via http://your_server_ip:9000"

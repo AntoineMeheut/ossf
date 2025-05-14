@@ -26,7 +26,7 @@ help_menu ()
 
 # Set the application user and home directory.
 APP_USER=git
-USER_ROOT=/home/$APP_USER
+USER_TMP=/tmp
 
 # Set the application root.
 APP_ROOT=$USER_ROOT/gitlab
@@ -92,7 +92,7 @@ sudo apt-get install -y curl openssh-server ca-certificates tzdata perl postfix
 # Install GitLab
 #
 echo -e "\n*== Installing GitLab...\n"
-cd $USER_ROOT
+cd $USER_TMP
 sudo curl https://packages.gitlab.com/install/repositories/gitlab/gitlab-ce/script.deb.sh | sudo bash
 sudo apt-get install gitlab-ce
 sudo apt-mark hold gitlab-ce
@@ -116,13 +116,6 @@ echo -e "*==================================================================*\n"
 
 echo -e " GitLab has been installed successfully!"
 echo -e " Navigate to $DOMAIN_VAR in your browser to access the application.\n"
-
-echo -e " Login with the default credentials:"
-echo -e "   admin@local.host"
-echo -e "   5iveL!fe\n"
-
-echo -e " Your PostgreSQL username and password is located in the following file:"
-echo -e "   $APP_ROOT/config/postgresql.yml\n"
 
 echo -e " Script written by Antoine Meheut, 2025."
 echo -e " https://github.com/AntoineMeheut\n"

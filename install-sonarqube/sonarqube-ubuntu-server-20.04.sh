@@ -11,7 +11,7 @@
 #
 # USAGE
 #   wget -O ~/sonarqube-ubuntu-server-20.04.sh https://raw.githubusercontent.com/AntoineMeheut/ossf/refs/heads/main/install-sonarqube/sonarqube-ubuntu-server-20.04.sh
-#   sudo bash ~/sonarqube-server-12.04.sh
+#   sudo bash ~/sonarqube-ubuntu-server-20.04.sh
 
 ##
 # Local variables & functions

@@ -64,8 +64,6 @@ if [ $DOMAIN_VAR ]; then
   
   echo -e "   Domain: $DOMAIN_VAR"
   echo -e "   GitLab URL: http://$DOMAIN_VAR/"
-  echo -e "   Application Root: $APP_ROOT"
-  echo -e "   Database Type: $DATABASE_TYPE\n"
   
   echo -e "*==================================================================*\n"
   sleep 3

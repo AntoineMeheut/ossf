@@ -97,13 +97,21 @@ sudo apt-mark hold gitlab-ce
 # Modify gitlab url
 #
 echo -e "\n*== Modify gitlab url...\n"
-sudo nano /etc/gitlab/gitlab.rb
+# sudo nano /etc/gitlab/gitlab.rb
+sudo sed -i "s/gitlab.example.com/$DOMAIN_VAR/" /etc/gitlab/gitlab.rb
 
 ##
 # Reconfigure Gitlab
 #
 echo -e "\n*== Reconfigure Gitlab...\n"
 sudo gitlab-ctl reconfigure
+
+##
+# Install Gitlab Runner
+#
+echo -e "\n*== Install Gitlab Runner...\n"
+curl -L "https://packages.gitlab.com/install/repositories/runner/gitlab-runner/script.deb.sh" | sudo bash
+sudo apt install gitlab-runner
 
 # Check application status
 sudo systemctl status gitlab-runsvdir.service

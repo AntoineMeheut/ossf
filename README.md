@@ -34,8 +34,9 @@
 	* [My goals](#my-goals)
 	* [Features](#features)
 	* [Prerequisites](#prerequisites)
-* [Gitlab-ce](#xxx)
-
+* [Gitlab CE & Runner installation](#gitlab-CE-&-Runner-installation)
+* [Sonarqube installation](#sonarqube-installation)
+* 
 * [Roadmap](#roadmap)
 * [Contributing](#contributing)
 * [License](#license)
@@ -70,54 +71,29 @@ The second machine contains:
 - Sonarqube for code quality and security analysis.
 
 Everything is orchestrated by pipelines in Gitlab.
-https://dev.to/henri_sekeladi/install-gitlab-ce-on-ubuntu-server-2404-5d4n
+
 <!-- SOFTWARE FACTORY INSTALLATION -->
-## Gitlab CE installation
-### Mettre à jour votre instance ubuntu
-```sh
-sudo apt update && sudo apt upgrade -y
+## Gitlab CE & Runner installation
+### Use the following script and commands
+```shell
+wget -O ~/gitlab-ubuntu-server-20.04.sh https://raw.githubusercontent.com/AntoineMeheut/ossf/refs/heads/main/install-gitlab-ce/gitlab-ubuntu-server-20.04.sh
 ```
 
-### Installer les dépendances de gitlab-ce
-```sh
-sudo apt-get install -y curl openssh-server ca-certificates tzdata perl postfix
+```shell
+sudo bash ~/gitlab-ubuntu-server-20.04.sh -d gitlab.ame.tech
+```
+## Sonarqube installation
+### Use the following script and commands
+```shell
+
 ```
 
-### Faire le lien avec l’image gitlab-ce
-```sh
-curl https://packages.gitlab.com/install/repositories/gitlab/gitlab-ce/script.deb.sh | sudo bash
+```shell
+
 ```
 
-### Installer gitlab-ce
-```sh
-sudo apt-get install gitlab-ce
-```
 
-### Fixer la version de gitlab-ce
-```sh
-sudo apt-mark hold gitlab-ce
-```
-
-### Configurer gitlab-ce
-```sh
-sudo nano /etc/gitlab/gitlab.rb
-```
-
-### Intégrer votre configuration à gitlab-ce
-```sh
-sudo gitlab-ctl reconfigure
-```
-
-## Installer Gitlab Runner
-```sh
-curl -L "https://packages.gitlab.com/install/repositories/runner/gitlab-runner/script.deb.sh" | sudo bash
-```
-
-```sh
-sudo apt install gitlab-runner
-```
-
-## Charger un projets dans votre Gitlab 
+## Upload a project to your Gitlab
 https://docs.gitlab.com/ci/quick_start/
 
 ## Gitleaks

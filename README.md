@@ -85,7 +85,7 @@ sudo bash ~/gitlab-ubuntu-server-20.04.sh -d gitlab.ame.tech
 ## Sonarqube installation
 ### Use the following script and commands
 ```shell
-
+#TODO
 ```
 
 ```shell

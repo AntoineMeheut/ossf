@@ -1,15 +1,14 @@
 #!/bin/bash
 # Unattended GitLab Installation for Ubuntu Server 20.04 64-Bit
 # Maintainer: github.contacts@protonmail.com
-# GitLab Version: latest version
 #
 # This script installs GitLab server on Ubuntu Server 20.04 with all dependencies.
 #
-# INFORMATION
+# INFORMATIONS
 # Distribution      : Ubuntu 20.04 64-Bit
 # GitLab Version    : latest version
+# PostgreSQL        : latest version
 # Web Server        : postfix
-# Init System       : systemd
 #
 # USAGE
 #   wget -O ~/gitlab-ubuntu-server-20.04.sh https://raw.githubusercontent.com/AntoineMeheut/ossf/refs/heads/main/install-gitlab-ce/gitlab-ubuntu-server-20.04.sh

@@ -2,7 +2,6 @@
 # Unattended GitLab Installation for Ubuntu Server 20.04 64-Bit
 # Maintainer: github.contacts@protonmail.com
 # GitLab Version: latest version
-# PostgreSQL Version: latest version
 #
 # This script installs GitLab server on Ubuntu Server 20.04 with all dependencies.
 #
@@ -11,7 +10,6 @@
 # GitLab Version    : latest version
 # Web Server        : postfix
 # Init System       : systemd
-# Database          : PostgreSQL
 #
 # USAGE
 #   wget -O ~/gitlab-ubuntu-server-20.04.sh https://raw.githubusercontent.com/AntoineMeheut/ossf/refs/heads/main/install-gitlab-ce/gitlab-ubuntu-server-20.04.sh
@@ -107,9 +105,10 @@ sudo nano /etc/gitlab/gitlab.rb
 echo -e "\n*== Reconfigure Gitlab...\n"
 sudo gitlab-ctl reconfigure
 
-# Double check application status
-sudo -u $APP_USER -H bundle exec rake gitlab:check RAILS_ENV=production
+# Check application status
+sudo systemctl status gitlab-runsvdir.service
 
+# Final exit
 echo -e "*==================================================================*\n"
 
 echo -e " GitLab has been installed successfully!"

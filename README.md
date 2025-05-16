@@ -59,7 +59,7 @@ This software factory is therefore built on:
 - and finally, a mechanism that allows you to obtain a complete analysis report in PDF format.
 
 ## Prerequisites
-This software factory is built on two virtual machines with an Ubuntu 22.04 server-type OS.
+This software factory is built on two virtual machines with an Ubuntu 20.04 server-type OS.
 
 The first machine contains:
 - Gitlab-ce to load the code to be analyzed,

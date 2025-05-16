@@ -14,6 +14,29 @@
 #   wget -O ~/gitlab-ubuntu-server-20.04.sh https://raw.githubusercontent.com/AntoineMeheut/ossf/refs/heads/main/install-gitlab-ce/gitlab-ubuntu-server-20.04.sh
 #   sudo bash ~/gitlab-ubuntu-server-20.04.sh -d gitlab.ame.tech
 
+##
+# Local variables & functions
+#
+# Define log file path
+logfile="/var/log/gitlab-ce-install.log"
+
+# Function to log to both file and terminal with timestamp
+log() {
+    local timestamp=$(date +"%Y-%m-%d %H:%M:%S")
+    echo "$timestamp $1" | sudo tee -a "$logfile"
+}
+
+# Function to log and exit on error
+log_and_exit() {
+    log "$1"
+    exit 1
+}
+
+# Function to run command and log errors
+run_command() {
+    "$@" || log_and_exit "Error: Failed to execute command: $*"
+}
+
 help_menu ()
 {
   echo "Usage: $0 -d DOMAIN_VAR "
@@ -39,33 +62,33 @@ while test $# -gt 0; do
       shift
       if test $# -gt 0; then
         DOMAIN_VAR=$1
-      else 
-        echo "No domain variable was specified."
+      else
+        run_command log "No domain variable was specified." && echo -e "No domain variable was specified."
         help_menu
         exit 1
       fi
       shift
       ;;
     *)
-      echo "Unknown argument: $1"
+      run_command log "Unknown argument: $1" && echo -e "Unknown argument: $1"
       exit 1
       ;;
   esac
 done
 
+##
+# Start of installation
+#
 # Check for domain variable.
 if [ $DOMAIN_VAR ]; then
-  echo -e "*==================================================================*\n"
-
-  echo -e " GitLab Installation has begun!\n"
-  
-  echo -e "   Domain: $DOMAIN_VAR"
-  echo -e "   GitLab URL: http://$DOMAIN_VAR/"
-  
-  echo -e "*==================================================================*\n"
+  run_command log "*==================================================================*" && echo -e "*==================================================================*"
+  run_command log " Gitlab-ce Installation has begun!" && echo -e " Gitlab-ce Installation has begun!"
+  run_command log "   Domain: $DOMAIN_VAR" && echo -e "   Domain: $DOMAIN_VAR"
+  run_command log "   GitLab URL: http://$DOMAIN_VAR/" && echo -e "   GitLab URL: http://$DOMAIN_VAR/"
+  run_command log "*==================================================================*" && echo -e "*==================================================================*"
   sleep 3
 else
-  echo "Please specify DOMAIN_VAR using the -d flag."
+  run_command log "Please specify DOMAIN_VAR using the -d flag." && echo -e "Please specify DOMAIN_VAR using the -d flag."
   help_menu
   exit 1
 fi
@@ -73,55 +96,57 @@ fi
 ##
 # Ubuntu update & upgrade
 #
-echo -e "\n*== Ubuntu update & upgrade...\n"
-sudo apt-get update -y 2>&1 >/dev/null
-sudo apt-get upgrade -y
+run_command log "Ubuntu update & upgrade..." && echo -e "Ubuntu update & upgrade..."
+run_command sudo apt-get update -y 2>&1 >/dev/null
+run_command sudo apt-get upgrade -y
 
 ##
 # Installing dependencies
 #
-echo -e "\n*== Installing dependencies...\n"
-sudo apt-get install -y curl openssh-server ca-certificates tzdata perl postfix
+run_command log "Installing dependencies..." && echo -e "Installing dependencies..."
+run_command sudo apt-get install -y curl openssh-server ca-certificates tzdata perl postfix
 
 ##
 # Install GitLab
 #
-echo -e "\n*== Installing GitLab...\n"
-cd $USER_TMP
-sudo curl https://packages.gitlab.com/install/repositories/gitlab/gitlab-ce/script.deb.sh | sudo bash
-sudo apt-get install gitlab-ce
-sudo apt-mark hold gitlab-ce
+run_command log "Installing GitLab..." && echo -e "Installing GitLab..."
+run_command cd $USER_TMP
+run_command sudo curl https://packages.gitlab.com/install/repositories/gitlab/gitlab-ce/script.deb.sh | sudo bash
+run_command sudo apt-get install gitlab-ce
+run_command sudo apt-mark hold gitlab-ce
 
 ##
 # Modify gitlab url
 #
-echo -e "\n*== Modify gitlab url...\n"
-# sudo nano /etc/gitlab/gitlab.rb
-sudo sed -i "s/gitlab.example.com/$DOMAIN_VAR/" /etc/gitlab/gitlab.rb
+run_command log "Modify gitlab url..." && echo -e "Modify gitlab url..."
+run_command sudo sed -i "s/gitlab.example.com/$DOMAIN_VAR/" /etc/gitlab/gitlab.rb
 
 ##
 # Reconfigure Gitlab
 #
-echo -e "\n*== Reconfigure Gitlab...\n"
-sudo gitlab-ctl reconfigure
+run_command log "Reconfigure Gitlab..." && echo -e "Reconfigure Gitlab..."
+run_command sudo gitlab-ctl reconfigure
 
 ##
 # Install Gitlab Runner
 #
-echo -e "\n*== Install Gitlab Runner...\n"
-curl -L "https://packages.gitlab.com/install/repositories/runner/gitlab-runner/script.deb.sh" | sudo bash
-sudo apt install gitlab-runner
+run_command log "Install Gitlab Runner..." && echo -e "Install Gitlab Runner..."
+run_command curl -L "https://packages.gitlab.com/install/repositories/runner/gitlab-runner/script.deb.sh" | sudo bash
+run_command sudo apt install gitlab-runner
 
+##
 # Check application status
-sudo systemctl status gitlab-runsvdir.service
+#
+run_command sudo systemctl status gitlab-runsvdir.service
 
+##
 # Final exit
-echo -e "*==================================================================*\n"
+#
+run_command log "*==================================================================*" && echo -e "*==================================================================*"
+run_command log "GitLab has been installed successfully!" && echo -e "GitLab has been installed successfully!"
+run_command log "Navigate to $DOMAIN_VAR in your browser to access the application." && echo -e "Navigate to $DOMAIN_VAR in your browser to access the application."
+run_command log " " && echo -e " "
+run_command log "Script written by Antoine Meheut, 2025." && echo -e "Script written by Antoine Meheut, 2025."
+run_command log "https://github.com/AntoineMeheut" && echo -e "https://github.com/AntoineMeheut"
+run_command log "*==================================================================*" && echo -e "*==================================================================*"
 
-echo -e " GitLab has been installed successfully!"
-echo -e " Navigate to $DOMAIN_VAR in your browser to access the application.\n"
-
-echo -e " Script written by Antoine Meheut, 2025."
-echo -e " https://github.com/AntoineMeheut\n"
-
-echo -e "*==================================================================*"

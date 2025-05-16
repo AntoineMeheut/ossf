@@ -74,7 +74,7 @@ Everything is orchestrated by pipelines in Gitlab.
 
 <!-- SOFTWARE FACTORY INSTALLATION -->
 ## Gitlab CE & Runner installation
-### Use the following script and commands
+### Use the following script and commands on the first VM
 ```shell
 wget -O ~/gitlab-ubuntu-server-20.04.sh https://raw.githubusercontent.com/AntoineMeheut/ossf/refs/heads/main/install-gitlab-ce/gitlab-ubuntu-server-20.04.sh
 ```
@@ -83,17 +83,17 @@ wget -O ~/gitlab-ubuntu-server-20.04.sh https://raw.githubusercontent.com/Antoin
 sudo bash ~/gitlab-ubuntu-server-20.04.sh -d gitlab.ame.tech
 ```
 ## Sonarqube installation
-### Use the following script and commands
+### Use the following script and commands on the second VM
 ```shell
-#TODO
+wget -O ~/sonarqube-ubuntu-server-20.04.sh https://raw.githubusercontent.com/AntoineMeheut/ossf/refs/heads/main/install-sonarqube/sonarqube-ubuntu-server-20.04.sh
 ```
 
 ```shell
-
+sudo bash ~/sonarqube-ubuntu-server-20.04.sh
 ```
-
 
 ## Upload a project to your Gitlab
+#TODO
 https://docs.gitlab.com/ci/quick_start/
 
 ## Gitleaks

@@ -93,8 +93,7 @@ sudo bash ~/sonarqube-ubuntu-server-20.04.sh
 ```
 
 ## Upload a project to your Gitlab
-#TODO
-https://docs.gitlab.com/ci/quick_start/
+Once you have both your servers installed and have verified that you can access the URLs of your Gitlab and Sonarqube instances, upload one or two projects to your Gitlab.
 
 ## Gitleaks
 https://blog.stephane-robert.info/docs/securiser/analyser-code/gitleaks/

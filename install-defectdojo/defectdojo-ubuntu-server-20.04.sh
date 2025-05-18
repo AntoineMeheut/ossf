@@ -44,12 +44,35 @@ run_command log " DefectDojo Installation has begun!" && echo -e " DefectDojo In
 run_command log "*==================================================================*" && echo -e "*==================================================================*"
 
 ##
-# Changing the Hostname of server to sonar
+# Clone the DefectDojo project
 #
-run_command log "XXX..." && sudo XXX
+run_command log "Clone the DefectDojo project..." && git clone https://github.com/DefectDojo/django-DefectDojo
+run_command log "Go to django-DefectDojo directory..." && cd django-DefectDojo
 
+##
+# Check if your installed toolkit is compatible
+#
+run_command log "Start docker compose..." && ./docker/docker-compose-check.sh
 
+##
+# Building Docker images
+#
+run_command log "Build docker image..." && docker compose build
+
+##
+# Run the application (for other profiles besides postgres-redis see
+# https://github.com/DefectDojo/django-DefectDojo/blob/dev/readme-docs/DOCKER.md)
+#
+run_command log "Start the application..." && sudo docker compose up -d
+
+##
+# Obtain admin credentials. The initializer can take up to 3 minutes to run.
+# Use docker compose logs -f initializer to track its progress.
+run_command log "Show admin credentials..." && docker compose logs initializer | grep "Admin password:"
+
+##
 # Final message
+#
 run_command log "*==================================================================*" && echo -e "*==================================================================*"
 run_command log "DefectDojo successfully installed. Access it via http://your_server_ip:9000." && echo -e "DefectDojo successfully installed. Access it via http://your_server_ip:9000"
 run_command log " " && echo -e " "

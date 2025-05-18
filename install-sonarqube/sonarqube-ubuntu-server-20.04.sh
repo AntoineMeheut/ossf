@@ -172,7 +172,9 @@ EOF
 run_command log "Starting and enabling SonarQube service..." && echo -e "Starting and enabling SonarQube service..."
 run_command sudo systemctl enable --now sonar
 
+##
 # Final message
+#
 run_command log "*==================================================================*" && echo -e "*==================================================================*"
 run_command log "SonarQube successfully installed. Access it via http://your_server_ip:9000." && echo -e "SonarQube successfully installed. Access it via http://your_server_ip:9000"
 run_command log " " && echo -e " "

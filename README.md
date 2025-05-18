@@ -17,9 +17,10 @@
   </a>
 
   <h3 align="center">Open Source Software Factory</h3>
-
+  <h3 align="center">THIS PROJECT IS CURRENTLY UNDER CONSTRUCTION!</h3>
+  
   <p align="center">
-    Principles, approach and installation of an open source software factory, to improve the quality and security of the code produced by a development team..
+    Principles, approach and installation of an open source software factory, to improve the quality and security of the code produced by a development team.
     <br />
     <a href="https://github.com/AntoineMeheut/blogame/issues">Report Bug</a>
     ·

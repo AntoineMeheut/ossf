@@ -121,7 +121,11 @@ sudo bash ~/defectdojo-ubuntu-server-20.04.sh
 ```
 ## Upload a project to your Gitlab
 Once you have both your servers installed and have verified that you can access the URLs of your Gitlab and Sonarqube instances, upload one or two projects to your Gitlab.
+# TODO
 
+## Prepare your Gitlab CI
+Use one of the Gitlab CI templates in this directory or upload your own.
+# TODO
 <!-- CONTRIBUTING -->
 ## Contributing
 

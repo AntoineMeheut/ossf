@@ -34,9 +34,11 @@
 	* [My goals](#my-goals)
 	* [Features](#features)
 	* [Prerequisites](#prerequisites)
+* [Needed Virtual Machines](#create-the-virtual-machines-we-need)
 * [Gitlab CE & Runner installation](#gitlab-CE-&-Runner-installation)
 * [Sonarqube installation](#sonarqube-installation)
-* 
+* [DefectDojo installation](#defectDojo-installation)
+* TODO
 * [Roadmap](#roadmap)
 * [Contributing](#contributing)
 * [License](#license)
@@ -46,33 +48,48 @@
 <!-- ABOUT THE PROJECT -->
 # About this project
 ## My goals
-By working in various startups and small development teams, I realized that these teams often lack the minimum tools to improve the quality and security of their developments. The desire to do better is very real, and only time and knowledge are holding them back.
+By working in various startups and small development teams, I realized that these teams often lack the minimum tools
+to improve the quality and security of their developments. The desire to do better is very real,
+and only time and knowledge are holding them back.
 
 ## Features
-In this repository, I propose an approach to quickly set up and use a software factory built on open source tools. The proposed architecture is very simple and not ready for production. But it will allow you to analyze and improve code very quickly. I use this architecture to conduct my own code audits. This allows me to very quickly identify areas in the code where I will spend time digging and understanding.
+In this repository, I propose an approach to quickly set up and use a software factory built on open source tools.
+The proposed architecture is very simple and not ready for production. But it will allow you to analyze
+and improve code very quickly. I use this architecture to conduct my own code audits.
+This allows me to very quickly identify areas in the code where I will spend time digging and understanding.
 
 This software factory is therefore built on:
-- a secrets search tool,
-- a tool for searching for security vulnerabilities in imported dependencies,
-- a static code security analysis tool,
-- a code quality analysis tool,
-- and finally, a mechanism that allows you to obtain a complete analysis report in PDF format.
+- a secrets search tool (Gitlab secrets detection),
+- a tool for searching for security vulnerabilities in imported dependencies (Gitlab dependency scanning),
+- a static code security analysis tool (Gitlab SAST),
+- a tool to scan your images (Gitlab container scan),
+- a code quality analysis tool (Sonarqube),
+- and finally, a mechanism that allows you to obtain a complete analysis report in a DevSecOps platform (DefectDojo).
 
 ## Prerequisites
-This software factory is built on two virtual machines with an Ubuntu 20.04 server-type OS.
+This software factory is built on three virtual machines with an Ubuntu 20.04 server-type OS.
 
 The first machine contains:
 - Gitlab-ce to load the code to be analyzed,
 - Gitlab Runner to use pipelines to orchestrate code analysis,
-- Owasp dependency check for analyzing imported dependencies,
-- and Horusec for static code security analysis.
+- Gitlab secret detection,
+- Gitlab dependency scanning for analyzing imported dependencies,
+- Gitlab SAST for static code security analysis,
+- Gitlab container scan to scan your images.
 
 The second machine contains:
 - Sonarqube for code quality and security analysis.
 
+The third machine contains:
+- DefectDojo, the tool that will enable DevSecOps analysis of your projects.
+
 Everything is orchestrated by pipelines in Gitlab.
 
 <!-- SOFTWARE FACTORY INSTALLATION -->
+## Create the virtual machines we need
+Use your favorite virtualization tool to create these three machines. This documentation is intended
+for Ubuntu OS version 20.04 LTS.
+
 ## Gitlab CE & Runner installation
 ### Use the following script and commands on the first VM
 ```shell
@@ -92,24 +109,17 @@ wget -O ~/sonarqube-ubuntu-server-20.04.sh https://raw.githubusercontent.com/Ant
 sudo bash ~/sonarqube-ubuntu-server-20.04.sh
 ```
 
+## DefectDojo installation
+### Use the following script and commands on the third VM
+```shell
+wget -O ~/defectdojo-ubuntu-server-20.04.sh https://raw.githubusercontent.com/AntoineMeheut/ossf/refs/heads/main/install-defectdojo/defectdojo-ubuntu-server-20.04.sh
+```
+
+```shell
+sudo bash ~/defectdojo-ubuntu-server-20.04.sh
+```
 ## Upload a project to your Gitlab
 Once you have both your servers installed and have verified that you can access the URLs of your Gitlab and Sonarqube instances, upload one or two projects to your Gitlab.
-
-## Gitleaks
-https://blog.stephane-robert.info/docs/securiser/analyser-code/gitleaks/
-https://gitlab.com/to-be-continuous/gitleaks
-
-## Owasp dependency check
-https://gitlab.com/gitlab-ci-utils/docker-dependency-check
-https://jdriven.com/blog/2022/07/OWASP-dependency-check-on-GitLab-com
-
-## Sonarqube
-https://medium.com/@alishayb/quality-assurance-using-sonarqube-gitlab-sonarqube-integration-f6ae61bc49f4
-https://blog.searce.com/diving-into-seamless-code-quality-unleashing-the-power-of-sonarqube-in-gitlab-pipeline-46573ee435b0
-
-## Horusec
-https://gitlab.com/tanuki-workshops/kube-demos/vulnerability-demo-projects/kotlin-horusec-demo/-/blob/master/.gitlab-ci.yml
-https://git.paytvlabs.com.br/devops/gitlab-ci/-/blob/2a2700c3cccb6b6d0042c3c88dde373618fbcb18/horusec.yml
 
 <!-- CONTRIBUTING -->
 ## Contributing

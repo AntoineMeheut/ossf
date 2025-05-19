@@ -70,6 +70,9 @@ This software factory is therefore built on:
 ## Prerequisites
 This software factory is built on three virtual machines with an Ubuntu 20.04 server-type OS.
 
+It is recommended to install docker on all three virtual machines, you can check it in a list of software
+that the Ubuntu installer offers you.
+
 The first machine contains:
 - Gitlab-ce to load the code to be analyzed,
 - Gitlab Runner to use pipelines to orchestrate code analysis,

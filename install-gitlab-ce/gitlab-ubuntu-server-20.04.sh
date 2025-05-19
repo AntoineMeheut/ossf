@@ -63,14 +63,14 @@ while test $# -gt 0; do
       if test $# -gt 0; then
         DOMAIN_VAR=$1
       else
-        run_command log "No domain variable was specified." && echo -e "No domain variable was specified."
+        run_command log "No domain variable was specified."
         help_menu
         exit 1
       fi
       shift
       ;;
     *)
-      run_command log "Unknown argument: $1" && echo -e "Unknown argument: $1"
+      run_command log "Unknown argument: $1"
       exit 1
       ;;
   esac
@@ -81,14 +81,14 @@ done
 #
 # Check for domain variable.
 if [ $DOMAIN_VAR ]; then
-  run_command log "*==================================================================*" && echo -e "*==================================================================*"
-  run_command log " Gitlab-ce Installation has begun!" && echo -e " Gitlab-ce Installation has begun!"
-  run_command log "   Domain: $DOMAIN_VAR" && echo -e "   Domain: $DOMAIN_VAR"
-  run_command log "   GitLab URL: http://$DOMAIN_VAR/" && echo -e "   GitLab URL: http://$DOMAIN_VAR/"
-  run_command log "*==================================================================*" && echo -e "*==================================================================*"
+  run_command log "*==================================================================*"
+  run_command log " Gitlab-ce Installation has begun!"
+  run_command log "   Domain: $DOMAIN_VAR"
+  run_command log "   GitLab URL: http://$DOMAIN_VAR/"
+  run_command log "*==================================================================*"
   sleep 3
 else
-  run_command log "Please specify DOMAIN_VAR using the -d flag." && echo -e "Please specify DOMAIN_VAR using the -d flag."
+  run_command log "Please specify DOMAIN_VAR using the -d flag."
   help_menu
   exit 1
 fi
@@ -96,20 +96,20 @@ fi
 ##
 # Ubuntu update & upgrade
 #
-run_command log "Ubuntu update & upgrade..." && echo -e "Ubuntu update & upgrade..."
+run_command log "Ubuntu update & upgrade..."
 run_command sudo apt-get update -y 2>&1 >/dev/null
 run_command sudo apt-get upgrade -y
 
 ##
 # Installing dependencies
 #
-run_command log "Installing dependencies..." && echo -e "Installing dependencies..."
+run_command log "Installing dependencies..."
 run_command sudo apt-get install -y curl openssh-server ca-certificates tzdata perl postfix
 
 ##
 # Install GitLab
 #
-run_command log "Installing GitLab..." && echo -e "Installing GitLab..."
+run_command log "Installing GitLab..."
 run_command cd $USER_TMP
 run_command sudo curl https://packages.gitlab.com/install/repositories/gitlab/gitlab-ce/script.deb.sh | sudo bash
 run_command sudo apt-get install gitlab-ce
@@ -118,19 +118,19 @@ run_command sudo apt-mark hold gitlab-ce
 ##
 # Modify gitlab url
 #
-run_command log "Modify gitlab url..." && echo -e "Modify gitlab url..."
+run_command log "Modify gitlab url..."
 run_command sudo sed -i "s/gitlab.example.com/$DOMAIN_VAR/" /etc/gitlab/gitlab.rb
 
 ##
 # Reconfigure Gitlab
 #
-run_command log "Reconfigure Gitlab..." && echo -e "Reconfigure Gitlab..."
+run_command log "Reconfigure Gitlab..."
 run_command sudo gitlab-ctl reconfigure
 
 ##
 # Install Gitlab Runner
 #
-run_command log "Install Gitlab Runner..." && echo -e "Install Gitlab Runner..."
+run_command log "Install Gitlab Runner..."
 run_command curl -L "https://packages.gitlab.com/install/repositories/runner/gitlab-runner/script.deb.sh" | sudo bash
 run_command sudo apt install gitlab-runner
 
@@ -142,11 +142,10 @@ run_command sudo systemctl status gitlab-runsvdir.service
 ##
 # Final exit
 #
-run_command log "*==================================================================*" && echo -e "*==================================================================*"
-run_command log "GitLab has been installed successfully!" && echo -e "GitLab has been installed successfully!"
-run_command log "Navigate to $DOMAIN_VAR in your browser to access the application." && echo -e "Navigate to $DOMAIN_VAR in your browser to access the application."
-run_command log " " && echo -e " "
-run_command log "Script written by Antoine Meheut, 2025." && echo -e "Script written by Antoine Meheut, 2025."
-run_command log "https://github.com/AntoineMeheut" && echo -e "https://github.com/AntoineMeheut"
-run_command log "*==================================================================*" && echo -e "*==================================================================*"
-
+run_command log "*==================================================================*"
+run_command log "GitLab has been installed successfully!"
+run_command log "Navigate to $DOMAIN_VAR in your browser to access the application."
+run_command log " "
+run_command log "Script written by Antoine Meheut, 2025."
+run_command log "https://github.com/AntoineMeheut"
+run_command log "*==================================================================*"

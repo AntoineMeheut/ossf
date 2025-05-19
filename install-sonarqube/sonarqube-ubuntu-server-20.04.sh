@@ -39,9 +39,9 @@ run_command() {
 ##
 # Start of installation
 #
-run_command log "*==================================================================*" && echo -e "*==================================================================*"
-run_command log " Sonarqube Installation has begun!" && echo -e " Sonarqube Installation has begun!"
-run_command log "*==================================================================*" && echo -e "*==================================================================*"
+run_command log "*==================================================================*"
+run_command log " Sonarqube Installation has begun!"
+run_command log "*==================================================================*"
 
 ##
 # Changing the Hostname of server to sonar
@@ -57,13 +57,13 @@ run_command log "Upgrading packages..." && sudo apt upgrade -y
 ##
 # Install Java 17
 #
-run_command log "Installing Java 17..." && echo -e "Installing Java 17..."
+run_command log "Installing Java 17..."
 run_command sudo apt-get install openjdk-17-jdk openjdk-17-jre -y
 
 ##
 # Configure ElasticSearch
 #
-run_command log "Configuring ElasticSearch..." && echo -e "Configuring ElasticSearch..."
+run_command log "Configuring ElasticSearch..."
 run_command sudo sh -c 'echo "vm.max_map_count=262144" >> /etc/sysctl.conf'
 run_command sudo sh -c 'echo "fs.file-max=65536" >> /etc/sysctl.conf'
 run_command sudo sh -c 'echo "ulimit -n 65536" >> /etc/sysctl.conf'
@@ -72,37 +72,37 @@ run_command sudo sh -c 'echo "ulimit -u 4096" >> /etc/sysctl.conf'
 ##
 # Add PostgreSQL repository
 #
-run_command log "Adding PostgreSQL repository..." && echo -e "Adding PostgreSQL repository..."
+run_command log "Adding PostgreSQL repository..."
 run_command sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
 
 ##
 # Download and add PostgreSQL repository key
 #
-run_command log "Downloading and adding PostgreSQL repository key..." && echo -e "Downloading and adding PostgreSQL repository key..."
+run_command log "Downloading and adding PostgreSQL repository key..."
 run_command wget -qO- https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add - &>/dev/null
 
 ##
 # Install PostgreSQL
 #
-run_command log "Installing PostgreSQL..." && echo -e "Installing PostgreSQL..."
+run_command log "Installing PostgreSQL..."
 run_command sudo apt-get -y install postgresql postgresql-contrib
 
 ##
 # Start and enable PostgreSQL
 #
-run_command log "Starting and enabling PostgreSQL..." && echo -e "Starting and enabling PostgreSQL..."
+run_command log "Starting and enabling PostgreSQL..."
 run_command sudo systemctl enable --now postgresql
 
 ##
 # Set password for Postgres user
 #
-run_command log "Setting password for user Postgres..." && echo -e "Setting password for user Postgres..."
+run_command log "Setting password for user Postgres..."
 run_command sudo passwd postgres
 
 ##
 # Setup database for Sonarqube
 #
-run_command log "Setting up database for Sonarqube..." && echo -e "Setting up database for Sonarqube..."
+run_command log "Setting up database for Sonarqube..."
 run_command sudo -u postgres bash <<EOF
     createuser sonar
     psql -c "ALTER USER sonar WITH ENCRYPTED PASSWORD 'sonar';"
@@ -113,7 +113,7 @@ EOF
 ##
 # Download and extract SonarQube
 #
-run_command log "Installing Sonarqube..." && echo -e "Installing Sonarqube..."
+run_command log "Installing Sonarqube..."
 run_command sudo wget -q https://binaries.sonarsource.com/Distribution/sonarqube/sonarqube-9.9.8.100196.zip -P /opt/
 run_command sudo apt-get -y install unzip
 run_command sudo unzip -q /opt/sonarqube-9.9.8.100196.zip -d /opt/
@@ -123,14 +123,14 @@ run_command sudo mv /opt/sonarqube-9.9.8.100196/ /opt/sonarqube
 ##
 # Set permissions
 #
-run_command log "Set permissions..." && echo -e "Set permissions..."
+run_command log "Set permissions..."
 log "Set permissions..."
 run_command sudo chown sonar:sonar /opt/sonarqube -R
 
 ##
 # Configure SonarQube properties
 #
-run_command log "Configuring SonarQube properties..." && echo -e "Configuring SonarQube properties..."
+run_command log "Configuring SonarQube properties..."
 sonar_properties="/opt/sonarqube/conf/sonar.properties"
 sonar_user_ln="26"
 sonar_pass_ln="27"
@@ -146,7 +146,7 @@ run_command sudo sed -i "${postgres_url_ln}i${postgres_url}" "${sonar_properties
 ##
 # Create the SonarQube service file
 #
-run_command log "Creating SonarQube service file..." && echo -e "Creating SonarQube service file..."
+run_command log "Creating SonarQube service file..."
 sudo tee /etc/systemd/system/sonar.service > /dev/null << EOF
 [Unit]
 Description=SonarQube service
@@ -169,15 +169,15 @@ EOF
 ##
 # Start and enable the SonarQube service
 #
-run_command log "Starting and enabling SonarQube service..." && echo -e "Starting and enabling SonarQube service..."
+run_command log "Starting and enabling SonarQube service..."
 run_command sudo systemctl enable --now sonar
 
 ##
 # Final message
 #
-run_command log "*==================================================================*" && echo -e "*==================================================================*"
-run_command log "SonarQube successfully installed. Access it via http://your_server_ip:9000." && echo -e "SonarQube successfully installed. Access it via http://your_server_ip:9000"
-run_command log " " && echo -e " "
-run_command log "Script written by Antoine Meheut, 2025." && echo -e "Script written by Antoine Meheut, 2025."
-run_command log "https://github.com/AntoineMeheut" && echo -e "https://github.com/AntoineMeheut"
-run_command log "*==================================================================*" && echo -e "*==================================================================*"
+run_command log "*==================================================================*"
+run_command log "SonarQube successfully installed. Access it via http://your_server_ip:9000."
+run_command log " "
+run_command log "Script written by Antoine Meheut, 2025."
+run_command log "https://github.com/AntoineMeheut"
+run_command log "*==================================================================*"

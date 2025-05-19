@@ -4,10 +4,10 @@
 #
 # This script installs DefectDojo server on Ubuntu Server 20.04 with all dependencies.
 #
-# INFORMATION
-# Distribution       : Ubuntu 20.04 64-Bit
+# INFORMATIONS
+# Distribution        : Ubuntu 20.04 64-Bit
 # DefectDojo Version  : sonarqube-9.9.8.100196
-# PostgreSQL Version : latest version
+# PostgreSQL Version  : latest version
 #
 # USAGE
 #   wget -O ~/defectdojo-ubuntu-server-20.04.sh https://raw.githubusercontent.com/AntoineMeheut/ossf/refs/heads/main/install-defectdojo/defectdojo-ubuntu-server-20.04.sh
@@ -39,9 +39,9 @@ run_command() {
 ##
 # Start of installation
 #
-run_command log "*==================================================================*" && echo -e "*==================================================================*"
-run_command log " DefectDojo Installation has begun!" && echo -e " DefectDojo Installation has begun!"
-run_command log "*==================================================================*" && echo -e "*==================================================================*"
+run_command log "*==================================================================*"
+run_command log " DefectDojo Installation has begun!"
+run_command log "*==================================================================*"
 
 ##
 # Clone the DefectDojo project
@@ -73,9 +73,11 @@ run_command log "Show admin credentials..." && docker compose logs initializer |
 ##
 # Final message
 #
-run_command log "*==================================================================*" && echo -e "*==================================================================*"
-run_command log "DefectDojo successfully installed. Access it via http://your_server_ip:9000." && echo -e "DefectDojo successfully installed. Access it via http://your_server_ip:9000"
-run_command log " " && echo -e " "
-run_command log "Script written by Antoine Meheut, 2025." && echo -e "Script written by Antoine Meheut, 2025."
-run_command log "https://github.com/AntoineMeheut" && echo -e "https://github.com/AntoineMeheut"
-run_command log "*==================================================================*" && echo -e "*==================================================================*"
+run_command log "*==================================================================*"
+run_command log "DefectDojo successfully installed. Access it via http://your_server_ip:8080."
+run_command log "Your admin password is:"
+run_command docker compose logs initializer | grep "Admin password:"
+run_command log " "
+run_command log "Script written by Antoine Meheut, 2025."
+run_command log "https://github.com/AntoineMeheut"
+run_command log "*==================================================================*"

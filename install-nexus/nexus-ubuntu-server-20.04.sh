@@ -114,7 +114,7 @@ EOF
 #
 run_command log "Starting and enabling Nexus service..."
 run_command sudo systemctl enable --now nexus
-sleep 5
+sleep 60
 
 ##
 # Get vm ip

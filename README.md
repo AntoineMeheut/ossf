@@ -92,8 +92,8 @@ that the Ubuntu installer offers you.
 +-+------------+   +-+------------+   +-+------------+   +-+------------+
 |[ VM1 ]       |   |[ VM2 ]       |   |[ VM3 ]       |   |[ VM4 ]       |
 |(Gitlab-ce)   |   |(Sonarqube)   |   |(DefectDojo)  |   |(Nexus)       |
-|1 Vcpu        |   |1 Vcpu        |   |1 Vcpu        |   |1 Vcpu        |
-|2098 Ram      |   |1024 Ram      |   |1024 Ram      |   |1024 Ram      |
+|2 Vcpu        |   |2 Vcpu        |   |2 Vcpu        |   |2 Vcpu        |
+|2048 Ram      |   |1024 Ram      |   |1024 Ram      |   |1024 Ram      |
 |30 Go disk    |   |15 Go disk    |   |15 Go disk    |   |15 Go disk    |
 +--------------+   +--------------+   +--------------+   +--------------+
 ```

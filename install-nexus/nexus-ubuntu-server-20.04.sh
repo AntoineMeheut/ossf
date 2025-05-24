@@ -77,12 +77,6 @@ run_command sudo mv "$sonatype_work" /opt
 run_command sudo rm -rf "$downloaded_file"
 
 ##
-# Change password for the Nexus user password: nexus123
-#
-run_command log "Change password for the Nexus user password: nexus123..."
-run_command echo "nexus:nexus123" | sudo chpasswd
-
-##
 # Set ownership for Nexus directories (checking if nexus_version is set)
 #
 run_command log "Set ownership for Nexus directories (checking if nexus_version is set)..."
@@ -120,6 +114,7 @@ EOF
 #
 run_command log "Starting and enabling Nexus service..."
 run_command sudo systemctl enable --now nexus
+sleep 5
 
 ##
 # Get vm ip
@@ -138,8 +133,6 @@ run_command log "Access it via http://$VM_IP:8081"
 run_command log "$ADMIN_LOGON"
 run_command log "$ADMIN_PASS"
 run_command log " "
-run_command cat /opt/sonatype-work/nexus3/admin.password
-run_command log "\n"
 run_command log "Script written by Antoine Meheut, 2025."
 run_command log "https://github.com/AntoineMeheut"
 run_command log "*==================================================================*"

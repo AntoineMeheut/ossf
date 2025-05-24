@@ -127,7 +127,7 @@ run_command sudo systemctl enable --now nexus
 run_command log "Get vm ip..."
 VM_IP=$(ip -o route get to 8.8.8.8 | sed -n 's/.*src \([0-9.]\+\).*/\1/p')
 ADMIN_LOGON="admin"
-ADMIN_PASS=$(sudo cat /opt/sonatype-work/"$nexus_version"/admin.password)
+ADMIN_PASS=$(sudo cat /opt/sonatype-work/nexus3/admin.password)
 
 ##
 # Final message

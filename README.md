@@ -166,6 +166,7 @@ sudo bash ~/defectdojo-ubuntu-server-20.04.sh
 ```shell
 download_url="https://download.sonatype.com/nexus/3/nexus-3.80.0-06-linux-aarch_64.tar.gz"
 downloaded_file="nexus-3.80.0-06-linux-aarch_64.tar.gz"
+nexus_version="nexus-3.80.0-06"
 ```
 
 ### Use the following script and commands on the third VM

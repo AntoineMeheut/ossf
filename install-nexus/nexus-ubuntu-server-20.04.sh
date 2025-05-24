@@ -65,20 +65,14 @@ run_command sudo apt install -y openjdk-8-jre-headless
 #
 run_command log "Download Nexus..."
 run_command sudo wget "$download_url"
-run_command sudo mv "$downloaded_file" /opt/
 
 ##
-# Extract the downloaded file
+# Extract and move the downloaded file
 #
-run_command log "Extract the downloaded file..."
-run_command sudo tar -zxvf /opt/"$downloaded_file"
-run_command sudo rm -rf /opt/"$downloaded_file"
-
-##
-# Create a Nexus user (modify as needed for password input)
-#
-run_command log "Create a Nexus user (modify as needed for password input)..."
-run_command sudo useradd -m -s /bin/bash -U nexus
+run_command log "Extract and move the downloaded file..."
+run_command sudo tar -zxvf "$downloaded_file"
+run_command sudo mv "nexus_version" /opt/
+run_command sudo rm -rf "$downloaded_file"
 
 ##
 # Change password for the Nexus user password: nexus123

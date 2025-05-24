@@ -135,11 +135,6 @@ run_command curl -L "https://packages.gitlab.com/install/repositories/runner/git
 run_command sudo apt install gitlab-runner
 
 ##
-# Check application status
-#
-run_command sudo systemctl status gitlab-runsvdir.service
-
-##
 # Final exit
 #
 run_command log "*==================================================================*"

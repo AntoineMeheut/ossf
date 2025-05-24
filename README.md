@@ -88,8 +88,9 @@ that the Ubuntu installer offers you.
 +-+------------+   +-+------------+   +-+------------+   +-+------------+
 |[ VM1 ]       |   |[ VM2 ]       |   |[ VM3 ]       |   |[ VM4 ]       |
 |(Gitlab-ce)   |   |(Sonarqube)   |   |(DefectDojo)  |   |(Nexus)       |
+|2 Vcpu        |   |1 Vcpu        |   |1 Vcpu        |   |1 Vcpu        |
 |4096 Ram      |   |4096 Ram      |   |2048 Ram      |   |2048 Ram      |
-|50 Go disk    |   |25 Go disk    |   |25 Go disk    |   |25 Go disk    |
+|50 Go disk    |   |50 Go disk    |   |50 Go disk    |   |50 Go disk    |
 +--------------+   +--------------+   +--------------+   +--------------+
 ```
 
@@ -153,11 +154,11 @@ sudo bash ~/defectdojo-ubuntu-server-20.04.sh
 ## Nexus installation
 ### Use the following script and commands on the third VM
 ```shell
-# TODO
+wget -O ~/nexus-ubuntu-server-20.04.sh https://raw.githubusercontent.com/AntoineMeheut/ossf/refs/heads/main/install-nexus/nexus-ubuntu-server-20.04.sh
 ```
 
 ```shell
-# TODO
+sudo bash ~/nexus-ubuntu-server-20.04.sh
 ```
 
 ## Upload a project to your Gitlab

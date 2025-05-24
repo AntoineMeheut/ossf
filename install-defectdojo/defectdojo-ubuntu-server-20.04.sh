@@ -85,7 +85,7 @@ EOF
 # Start and enable the DefectDojo service
 #
 run_command log "Starting and enabling DefectDojo service..."
-run_command sudo systemctl enable --now defectdojo
+run_command sudo systemctl enable --now defectdojo.service
 sleep 60
 
 ##

@@ -63,7 +63,7 @@ run_command log "Build docker image..." && docker compose build
 # Run the application (for other profiles besides postgres-redis see
 # https://github.com/DefectDojo/django-DefectDojo/blob/dev/readme-docs/DOCKER.md)
 #
-run_command log "Start the application..." && sudo docker compose up -d
+run_command log "Start the application..." && sudo docker compose up -d --restart unless-stopped
 sleep 60
 
 ##

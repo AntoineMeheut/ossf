@@ -64,6 +64,7 @@ run_command log "Build docker image..." && docker compose build
 # https://github.com/DefectDojo/django-DefectDojo/blob/dev/readme-docs/DOCKER.md)
 #
 run_command log "Start the application..." && sudo docker compose up -d
+sleep 60
 
 ##
 # Get vm ip

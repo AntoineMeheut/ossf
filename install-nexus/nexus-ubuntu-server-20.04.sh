@@ -90,18 +90,7 @@ if [ -n "$nexus_version" ]; then
   run_command sudo chown -R nexus:nexus /opt/"$nexus_version"
   run_command sudo chown -R nexus:nexus /opt/sonatype-work
 else
-  run_command log "Failed to determine Nexus version. Check the script and try again."
-  exit 1
-fi
-
-##
-# Edit Nexus runtime configuration (checking if nexus_version is set)
-#
-run_command log "Edit Nexus runtime configuration (checking if nexus_version is set)..."
-if [ -n "$nexus_version" ]; then
-  run_command sudo sed -i 's/^run_as_user=.*/run_as_user="nexus"/' "/opt/$nexus_version/bin/nexus.rc"
-else
-  run_command log "Failed to determine Nexus version. Check the script and try again."
+  run_command log "Set ownership for Nexus directories (checking if nexus_version is set)."
   exit 1
 fi
 

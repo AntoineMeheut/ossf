@@ -173,10 +173,16 @@ run_command log "Starting and enabling SonarQube service..."
 run_command sudo systemctl enable --now sonar
 
 ##
+# Get vm ip
+#
+run_command log "Get vm ip..."
+VM_IP=$(ip -o route get to 8.8.8.8 | sed -n 's/.*src \([0-9.]\+\).*/\1/p')
+
+##
 # Final message
 #
 run_command log "*==================================================================*"
-run_command log "SonarQube successfully installed. Access it via http://your_server_ip:9000."
+run_command log "SonarQube successfully installed. Access it via http://$VM_IP:9000."
 run_command log " "
 run_command log "Script written by Antoine Meheut, 2025."
 run_command log "https://github.com/AntoineMeheut"

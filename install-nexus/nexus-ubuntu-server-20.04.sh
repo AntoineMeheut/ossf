@@ -140,10 +140,16 @@ run_command log "Check Nexus port status..."
 run_command netstat -lnpt
 
 ##
+# Get vm ip
+#
+run_command log "Get vm ip..."
+VM_IP=$(ip -o route get to 8.8.8.8 | sed -n 's/.*src \([0-9.]\+\).*/\1/p')
+
+##
 # Final message
 #
 run_command log "*==================================================================*"
-run_command log "Nexus successfully installed. Access it via http://your_server_ip:8080."
+run_command log "Nexus successfully installed. Access it via http://$VM_IP:8080."
 run_command log "Your admin password is:"
 run_command cat /opt/sonatype-work/nexus3/admin.password
 run_command log "\n"

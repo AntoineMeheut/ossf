@@ -66,15 +66,16 @@ run_command log "Build docker image..." && docker compose build
 run_command log "Start the application..." && sudo docker compose up -d
 
 ##
-# Obtain admin credentials. The initializer can take up to 3 minutes to run.
-# Use docker compose logs -f initializer to track its progress.
-run_command log "Show admin credentials..." && docker compose logs initializer | grep "Admin password:"
+# Get vm ip
+#
+run_command log "Get vm ip..."
+VM_IP=$(ip -o route get to 8.8.8.8 | sed -n 's/.*src \([0-9.]\+\).*/\1/p')
 
 ##
 # Final message
 #
 run_command log "*==================================================================*"
-run_command log "DefectDojo successfully installed. Access it via http://your_server_ip:8080."
+run_command log "DefectDojo successfully installed. Access it via http://$VM_IP:8080."
 run_command log "Your admin password is:"
 run_command docker compose logs initializer | grep "Admin password:"
 run_command log " "

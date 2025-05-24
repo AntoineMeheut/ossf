@@ -70,7 +70,7 @@ run_command sudo mv "$download_url" /opt/
 # Extract Nexus version from the downloaded file name
 #
 run_command log "Extract Nexus version from the downloaded file name..."
-run_command nexus_version=$(tar tzf /opt/"$downloaded_file" | grep -oP 'nexus-3\.\d+\.\d+-\d+' | head -n 1)
+run_command nexus_version=$(sudo tar tzf /opt/"$downloaded_file" | grep -oP 'nexus-3\.\d+\.\d+-\d+' | head -n 1)
 run_command sudo tar -zxvf /opt/"$downloaded_file"
 run_command sudo rm -rf /opt/"$downloaded_file"
 
@@ -91,8 +91,8 @@ run_command echo "nexus:nexus123" | sudo chpasswd
 #
 run_command log "Set ownership for Nexus directories (checking if nexus_version is set)..."
 if [ -n "$nexus_version" ]; then
-  run_command sudo chown -R nexus:nexus "$nexus_version"
-  run_command sudo chown -R nexus:nexus sonatype-work
+  run_command sudo chown -R nexus:nexus /opt/"$nexus_version"
+  run_command sudo chown -R nexus:nexus /opt/sonatype-work
 else
   run_command log "Failed to determine Nexus version. Check the script and try again."
   exit 1

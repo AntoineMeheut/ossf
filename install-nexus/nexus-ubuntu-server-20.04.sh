@@ -21,6 +21,7 @@
 download_url="https://download.sonatype.com/nexus/3/nexus-3.80.0-06-linux-aarch_64.tar.gz"
 downloaded_file="nexus-3.80.0-06-linux-aarch_64.tar.gz"
 nexus_version="nexus-3.80.0-06"
+sonatype_work="sonatype-work"
 logfile="/var/log/nexus-install.log"
 
 # Function to log to both file and terminal with timestamp
@@ -72,6 +73,7 @@ run_command sudo wget "$download_url"
 run_command log "Extract and move the downloaded file..."
 run_command sudo tar -zxvf "$downloaded_file"
 run_command sudo mv "$nexus_version" /opt
+run_command sudo mv "$sonatype_work" /opt
 run_command sudo rm -rf "$downloaded_file"
 
 ##

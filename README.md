@@ -90,7 +90,7 @@ that the Ubuntu installer offers you.
 |(Gitlab-ce)   |   |(Sonarqube)   |   |(DefectDojo)  |   |(Nexus)       |
 |2 Vcpu        |   |1 Vcpu        |   |1 Vcpu        |   |1 Vcpu        |
 |4096 Ram      |   |4096 Ram      |   |2048 Ram      |   |2048 Ram      |
-|50 Go disk    |   |50 Go disk    |   |50 Go disk    |   |50 Go disk    |
+|80 Go disk    |   |50 Go disk    |   |50 Go disk    |   |50 Go disk    |
 +--------------+   +--------------+   +--------------+   +--------------+
 ```
 

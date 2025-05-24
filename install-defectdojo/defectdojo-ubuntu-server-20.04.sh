@@ -71,13 +71,14 @@ run_command log "Start the application..." && sudo docker compose up -d
 run_command log "Get vm ip..."
 VM_IP=$(ip -o route get to 8.8.8.8 | sed -n 's/.*src \([0-9.]\+\).*/\1/p')
 ADMIN_LOGON=$(sudo docker logs django-defectdojo-initializer-1 | grep "Admin user:")
-ADMIN_PASS=(sudo docker logs django-defectdojo-initializer-1 | grep "Admin password:")
+ADMIN_PASS=$(sudo docker logs django-defectdojo-initializer-1 | grep "Admin password:")
 
 ##
 # Final message
 #
 run_command log "*==================================================================*"
-run_command log "DefectDojo successfully installed. Access it via http://$VM_IP:8080/login"
+run_command log "DefectDojo has been installed successfully!"
+run_command log "Access it via http://$VM_IP:8080/login"
 run_command log "$ADMIN_LOGON"
 run_command log "$ADMIN_PASS"
 run_command log " "

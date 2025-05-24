@@ -139,6 +139,8 @@ run_command sudo apt install gitlab-runner
 #
 run_command log "Get vm ip..."
 VM_IP=$(ip -o route get to 8.8.8.8 | sed -n 's/.*src \([0-9.]\+\).*/\1/p')
+ADMIN_LOGON="root"
+ADMIN_PASS=$(sudo cat /etc/gitlab/initial_root_password | grep "Password: ")
 
 ##
 # Final exit
@@ -146,7 +148,9 @@ VM_IP=$(ip -o route get to 8.8.8.8 | sed -n 's/.*src \([0-9.]\+\).*/\1/p')
 run_command log "*==================================================================*"
 run_command log "GitLab has been installed successfully!"
 run_command log "Your domain name is $DOMAIN_VAR, use it directly or,"
-run_command log "Navigate to http://$VM_IP in your browser to access the application."
+run_command log "Access it via http://$VM_IP"
+run_command log "$ADMIN_LOGON"
+run_command log "$ADMIN_PASS"
 run_command log " "
 run_command log "Script written by Antoine Meheut, 2025."
 run_command log "https://github.com/AntoineMeheut"

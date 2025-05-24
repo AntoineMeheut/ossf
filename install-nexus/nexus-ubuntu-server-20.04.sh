@@ -144,13 +144,18 @@ run_command netstat -lnpt
 #
 run_command log "Get vm ip..."
 VM_IP=$(ip -o route get to 8.8.8.8 | sed -n 's/.*src \([0-9.]\+\).*/\1/p')
+ADMIN_LOGON="admin"
+ADMIN_PASS=$(sudo cat /opt/sonatype-work/nexus3/admin.password)
 
 ##
 # Final message
 #
 run_command log "*==================================================================*"
-run_command log "Nexus successfully installed. Access it via http://$VM_IP:8080."
-run_command log "Your admin password is:"
+run_command log "Nexus has been installed successfully!"
+run_command log "Access it via http://$VM_IP:8080"
+run_command log "$ADMIN_LOGON"
+run_command log "$ADMIN_PASS"
+run_command log " "
 run_command cat /opt/sonatype-work/nexus3/admin.password
 run_command log "\n"
 run_command log "Script written by Antoine Meheut, 2025."

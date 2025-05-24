@@ -177,12 +177,17 @@ run_command sudo systemctl enable --now sonar
 #
 run_command log "Get vm ip..."
 VM_IP=$(ip -o route get to 8.8.8.8 | sed -n 's/.*src \([0-9.]\+\).*/\1/p')
+ADMIN_LOGON="admin"
+ADMIN_PASS="admin"
 
 ##
 # Final message
 #
 run_command log "*==================================================================*"
-run_command log "SonarQube successfully installed. Access it via http://$VM_IP:9000."
+run_command log "SonarQube has been installed successfully!"
+run_command log "Access it via http://$VM_IP:9000"
+run_command log "$ADMIN_LOGON"
+run_command log "$ADMIN_PASS"
 run_command log " "
 run_command log "Script written by Antoine Meheut, 2025."
 run_command log "https://github.com/AntoineMeheut"

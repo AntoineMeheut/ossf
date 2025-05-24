@@ -71,7 +71,7 @@ run_command sudo wget "$download_url"
 #
 run_command log "Extract and move the downloaded file..."
 run_command sudo tar -zxvf "$downloaded_file"
-run_command sudo mv "$nexus_version" /opt/
+run_command sudo mv "$nexus_version" /opt
 run_command sudo rm -rf "$downloaded_file"
 
 ##

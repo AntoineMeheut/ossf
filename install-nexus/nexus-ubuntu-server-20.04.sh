@@ -60,23 +60,19 @@ run_command log "Install OpenJDK 8..."
 run_command sudo apt install -y openjdk-8-jre-headless
 
 ##
-# Navigate to the /opt directory
-#
-run_command log "Navigate to the /opt directory..."
-run_command cd /opt
-
-##
 # Download Nexus
 #
 run_command log "Download Nexus..."
 run_command sudo wget "$download_url"
+run_command sudo mv "$download_url" /opt/
 
 ##
 # Extract Nexus version from the downloaded file name
 #
 run_command log "Extract Nexus version from the downloaded file name..."
-run_command nexus_version=$(tar tzf "$downloaded_file" | grep -oP 'nexus-3\.\d+\.\d+-\d+' | head -n 1)
-run_command sudo tar -zxvf "$downloaded_file"
+run_command nexus_version=$(tar tzf /opt/"$downloaded_file" | grep -oP 'nexus-3\.\d+\.\d+-\d+' | head -n 1)
+run_command sudo tar -zxvf /opt/"$downloaded_file"
+run_command sudo rm -rf /opt/"$downloaded_file"
 
 ##
 # Create a Nexus user (modify as needed for password input)

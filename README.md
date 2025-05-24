@@ -97,6 +97,12 @@ that the Ubuntu installer offers you.
 |30 Go disk    |   |15 Go disk    |   |15 Go disk    |   |15 Go disk    |
 +--------------+   +--------------+   +--------------+   +--------------+
 ```
+On each VM, it is recommended to install net-tools, which contains a set of programs for controlling
+the Linux kernel's network subsystem. It is required for some of the installation scripts.
+
+```shell
+sudo apt install net-tools
+```
 
 ### First machine for Gitlab
 The first machine contains:

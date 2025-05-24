@@ -95,30 +95,31 @@ else
 fi
 
 ##
-# Switch to the Nexus user and start Nexus
+# Create the Nexus service file
 #
-run_command log "Switch to the Nexus user and start Nexus..."
-run_command sudo su - nexus <<EOF
-/opt/$nexus_version/bin/nexus start
+run_command log "Creating Nexus service file..."
+sudo tee /etc/systemd/system/nexus.service > /dev/null << EOF
+[Unit]
+Description=nexus service
+After=network.target
+
+[Service]
+Type=forking
+LimitNOFILE=65536
+ExecStart=/opt/nexus/bin/nexus start
+ExecStop=/opt/nexus/bin/nexus stop
+User=nexus
+Restart=on-abort
+
+[Install]
+WantedBy=multi-user.target
 EOF
 
 ##
-# Wait for 60 seconds to allow Nexus to initialize
+# Start and enable the Nexus service
 #
-run_command log "Wait for 60 seconds to allow Nexus to initialize..."
-run_command sleep 60
-
-##
-# Check Nexus process status
-#
-run_command log "Check Nexus process status..."
-run_command ps aux | grep nexus
-
-##
-# Check Nexus port status
-#
-run_command log "Check Nexus port status..."
-run_command netstat -lnpt
+run_command log "Starting and enabling Nexus service..."
+run_command sudo systemctl enable --now nexus
 
 ##
 # Get vm ip

@@ -65,7 +65,7 @@ run_command sudo apt install -y openjdk-8-jre-headless
 #
 run_command log "Download Nexus..."
 run_command sudo wget "$download_url"
-run_command sudo mv "$download_url" /opt/
+run_command sudo mv "$downloaded_file" /opt/
 
 ##
 # Extract the downloaded file

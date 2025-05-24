@@ -60,10 +60,32 @@ run_command log "Start docker compose..." && ./docker/docker-compose-check.sh
 run_command log "Build docker image..." && docker compose build
 
 ##
-# Run the application (for other profiles besides postgres-redis see
-# https://github.com/DefectDojo/django-DefectDojo/blob/dev/readme-docs/DOCKER.md)
+# Create the DefectDojo service file
 #
-run_command log "Start the application..." && sudo docker compose up -d --restart unless-stopped
+run_command log "Creating DefectDojo service file..."
+sudo tee /etc/systemd/system/defectdojo.service > /dev/null << EOF
+[Unit]
+Description=DefectDojo Service
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/home/dojo/django-DefectDojo
+ExecStart=/usr/bin/docker-compose up -d
+ExecStop=/usr/bin/docker-compose down
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+##
+# Start and enable the DefectDojo service
+#
+run_command log "Starting and enabling DefectDojo service..."
+run_command sudo systemctl enable --now defectdojo
 sleep 60
 
 ##

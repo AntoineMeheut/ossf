@@ -162,6 +162,12 @@ sudo bash ~/defectdojo-ubuntu-server-20.04.sh
 ```
 
 ## Nexus installation
+### Choose your Nexus version in the script by changing
+```shell
+download_url="https://download.sonatype.com/nexus/3/nexus-3.80.0-06-linux-aarch_64.tar.gz"
+downloaded_file="nexus-3.80.0-06-linux-aarch_64.tar.gz"
+```
+
 ### Use the following script and commands on the third VM
 ```shell
 wget -O ~/nexus-ubuntu-server-20.04.sh https://raw.githubusercontent.com/AntoineMeheut/ossf/refs/heads/main/install-nexus/nexus-ubuntu-server-20.04.sh

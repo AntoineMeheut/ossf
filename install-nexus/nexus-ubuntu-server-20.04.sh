@@ -6,7 +6,7 @@
 #
 # INFORMATIONS
 # Distribution        : Ubuntu 20.04 64-Bit
-# Nexus Version       : latest
+# Nexus Version       : nexus-3.80.0-06-linux-aarch_64
 #
 # USAGE
 #   wget -O ~/nexus-ubuntu-server-20.04.sh https://raw.githubusercontent.com/AntoineMeheut/ossf/refs/heads/main/install-nexus/nexus-ubuntu-server-20.04.sh
@@ -18,8 +18,8 @@
 ##
 # Latest Nexus Downlad url & log file path
 #
-download_url="https://download.sonatype.com/nexus/3/latest-unix.tar.gz"
-downloaded_file="latest-unix.tar.gz"
+download_url="https://download.sonatype.com/nexus/3/nexus-3.80.0-06-linux-aarch_64.tar.gz"
+downloaded_file="nexus-3.80.0-06-linux-aarch_64.tar.gz"
 logfile="/var/log/nexus-install.log"
 
 # Function to log to both file and terminal with timestamp

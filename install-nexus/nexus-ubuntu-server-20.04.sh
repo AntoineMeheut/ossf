@@ -134,7 +134,7 @@ ADMIN_PASS=$(sudo cat /opt/sonatype-work/nexus3/admin.password)
 #
 run_command log "*==================================================================*"
 run_command log "Nexus has been installed successfully!"
-run_command log "Access it via http://$VM_IP:8080"
+run_command log "Access it via http://$VM_IP:8081"
 run_command log "$ADMIN_LOGON"
 run_command log "$ADMIN_PASS"
 run_command log " "

@@ -85,7 +85,6 @@ run_command log "Add DefectDojo to cron tab..."
 USER="dojo"
 run_command echo "@reboot /bin/sleep 60 && /home/dojo/django-DefectDojo/docker-compose.yml up -d" >> cronjobs.txt
 run_command sudo mv cronjobs.txt /var/spool/cron/crontabs/"$USER"
-run_command rm cronjobs.txt
 
 ##
 # Get vm ip

@@ -63,19 +63,64 @@ run_command log "Build docker image..." && docker compose build
 # Create the DefectDojo service file
 #
 run_command log "Creating DefectDojo service file..."
-sudo tee /etc/systemd/system/defectdojo.service > /dev/null << EOF
+sudo tee /etc/systemd/system/dojo.service > /dev/null << EOF
 [Unit]
-Description=DefectDojo Service
-Requires=docker.service
-After=docker.service
+Description=uWSGI instance to serve DefectDojo
+Requires=nginx.service mysql.service
+Before=nginx.service
+After=mysql.service
 
 [Service]
-Type=oneshot
-RemainAfterExit=yes
-WorkingDirectory=/home/dojo/django-DefectDojo
-ExecStart=/usr/bin/docker-compose up -d
-ExecStop=/usr/bin/docker-compose down
-TimeoutStartSec=0
+ExecStart=/bin/bash -c 'su - dojo -c "cd /opt/dojo/django-DefectDojo && source ../bin/activate && uwsgi --socket :8001 --wsgi-file wsgi.py --workers 7"'
+Restart=always
+RestartSec=3
+#StandardOutput=syslog
+#StandardError=syslog
+SyslogIdentifier=dojo
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+##
+# Create the Celery service file
+#
+run_command log "Creating Celery service file..."
+sudo tee /etc/systemd/system/celery-worker.service > /dev/null << EOF
+[Unit]
+Description=celery workers for DefectDojo
+Requires=dojo.service
+After=dojo.service
+
+[Service]
+ExecStart=/bin/bash -c 'su - dojo -c "cd /opt/dojo/django-DefectDojo && source ../bin/activate && celery -A dojo worker -l info --concurrency 3"'
+Restart=always
+RestartSec=3
+#StandardOutput=syslog
+#StandardError=syslog
+SyslogIdentifier=celeryworker
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+##
+# Create the Celery service file
+#
+run_command log "Creating Celery service file..."
+sudo tee /etc/systemd/system/celery-beat.service > /dev/null << EOF
+[Unit]
+Description=celery beat for DefectDojo
+Requires=dojo.service
+After=dojo.service
+
+[Service]
+ExecStart=/bin/bash -c 'su - dojo -c "cd /opt/dojo/django-DefectDojo && source ../bin/activate && celery beat -A dojo -l info"'
+Restart=always
+RestartSec=3
+#StandardOutput=syslog
+#StandardError=syslog
+SyslogIdentifier=celerybeat
 
 [Install]
 WantedBy=multi-user.target
@@ -85,8 +130,12 @@ EOF
 # Start and enable the DefectDojo service
 #
 run_command log "Starting and enabling DefectDojo service..."
-run_command sudo systemctl enable --now defectdojo.service
-sleep 60
+run_command sudo systemctl enable --now dojo.service
+sleep 10
+run_command sudo systemctl enable --now celery-worker.service
+sleep 10
+run_command sudo systemctl enable --now celery-beat.service
+sleep 10
 
 ##
 # Get vm ip

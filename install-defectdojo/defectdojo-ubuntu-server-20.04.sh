@@ -82,9 +82,9 @@ sleep 60
 # Add DefectDojo to cron tab
 #
 run_command log "Add DefectDojo to cron tab..."
-new_job="@reboot sleep 60 && /usr/local/bin/docker-compose -f /home/dojo/django-DefectDojo/docker-compose.yml up -d"
-cmd_1="crontab -l 2>/dev/null"
-run_command "$cmd_1" ; echo "$new_job" | crontab -
+croncmd="/home/dojo/django-DefectDojo/docker-compose.yml up -d"
+cronjob="0 */15 * * * $croncmd"
+run_command crontab -l | grep -v -F "$croncmd" ; echo "$cronjob" | crontab -
 
 ##
 # Get vm ip

@@ -55,6 +55,11 @@ run_command log "Updating packages..." && sudo apt update -y
 run_command log "Upgrading packages..." && sudo apt upgrade -y
 
 ##
+# Install Ubuntu net-tools
+#
+run_command log "Install Ubuntu net-tools..." && sudo apt install net-tools -y
+
+##
 # Install Java 17
 #
 run_command log "Installing Java 17..."

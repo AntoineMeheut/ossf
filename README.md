@@ -79,9 +79,10 @@ This software factory is therefore built on:
 ## Prerequisites
 This software factory is built on four virtual machines with an Ubuntu 20.04 server-type OS.
 
-I'm installing my software factory on a simple MacBook, with very little CPU, RAM, and disk space. I'm therefore
-providing my VM configuration as an indication, which is sufficient for performing my code audits.
-Of course, if you want a production installation, you'll need to review this VM configuration.
+I'm installing my software factory on a simple MacBook. I'm therefore providing my VM configuration as an indication,
+which is sufficient for performing my code audits.
+
+Of course, if you want a production installation, you'll need to review this configuration.
 
 It is mandatory to install docker on Gitlab-ce and DefectDojo virtual machines, you can check it in a list of
 Ubuntu installer software.
@@ -92,17 +93,11 @@ Ubuntu installer software.
 +-+------------+   +-+------------+   +-+------------+   +-+------------+
 |[ VM1 ]       |   |[ VM2 ]       |   |[ VM3 ]       |   |[ VM4 ]       |
 |(Gitlab-ce)   |   |(Sonarqube)   |   |(DefectDojo)  |   |(Nexus)       |
-|2 Vcpu        |   |2 Vcpu        |   |2 Vcpu        |   |2 Vcpu        |
+|2 CPU         |   |2 CPU         |   |2 CPU         |   |2 CPU         |
 |2048 Ram      |   |1024 Ram      |   |1024 Ram      |   |1024 Ram      |
 |30 Go disk    |   |15 Go disk    |   |15 Go disk    |   |15 Go disk    |
 |Docker        |   |              |   |Docker        |   |              |
 +--------------+   +--------------+   +--------------+   +--------------+
-```
-On each VM, it is recommended to install net-tools, which contains a set of programs for controlling
-the Linux kernel's network subsystem. It is required for some of the installation scripts.
-
-```shell
-sudo apt install net-tools
 ```
 
 ### First machine for Gitlab

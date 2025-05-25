@@ -44,6 +44,18 @@ run_command log " DefectDojo Installation has begun!"
 run_command log "*==================================================================*"
 
 ##
+# Ubuntu update & upgrade
+#
+run_command log "Ubuntu update & upgrade..."
+run_command sudo apt-get update -y 2>&1 >/dev/null
+run_command sudo apt-get upgrade -y
+
+##
+# Install Ubuntu net-tools
+#
+run_command log "Install Ubuntu net-tools..." && sudo apt install net-tools -y
+
+##
 # Clone the DefectDojo project
 #
 run_command log "Clone the DefectDojo project..." && git clone https://github.com/DefectDojo/django-DefectDojo
@@ -70,8 +82,9 @@ sleep 60
 # Add DefectDojo to cron tab
 #
 run_command log "Add DefectDojo to cron tab..."
-run_command crontab -e
-run_command @reboot sleep 60 && /usr/local/bin/docker-compose -f /home/dojo/django-DefectDojo/docker-compose.yml up -d
+new_job="@reboot sleep 60 && /usr/local/bin/docker-compose -f /home/dojo/django-DefectDojo/docker-compose.yml up -d"
+cmd_1="crontab -l 2>/dev/null"
+run_command "$cmd_1" ; echo "$new_job" | crontab -
 
 ##
 # Get vm ip

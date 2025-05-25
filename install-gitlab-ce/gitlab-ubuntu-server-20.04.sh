@@ -101,6 +101,11 @@ run_command sudo apt-get update -y 2>&1 >/dev/null
 run_command sudo apt-get upgrade -y
 
 ##
+# Install Ubuntu net-tools
+#
+run_command log "Install Ubuntu net-tools..." && sudo apt install net-tools -y
+
+##
 # Installing dependencies
 #
 run_command log "Installing dependencies..."

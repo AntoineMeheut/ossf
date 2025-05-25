@@ -60,81 +60,18 @@ run_command log "Start docker compose..." && ./docker/docker-compose-check.sh
 run_command log "Build docker image..." && docker compose build
 
 ##
-# Create the DefectDojo service file
-#
-run_command log "Creating DefectDojo service file..."
-sudo tee /etc/systemd/system/dojo.service > /dev/null << EOF
-[Unit]
-Description=uWSGI instance to serve DefectDojo
-
-[Service]
-ExecStart=/bin/bash -c 'su - dojo -c "cd /opt/dojo/django-DefectDojo && source ../bin/activate && uwsgi --socket :8001 --wsgi-file wsgi.py --workers 7"'
-Restart=always
-RestartSec=3
-#StandardOutput=syslog
-#StandardError=syslog
-SyslogIdentifier=dojo
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-##
-# Create the Celery service file
-#
-run_command log "Creating Celery-worker service file..."
-sudo tee /etc/systemd/system/celery-worker.service > /dev/null << EOF
-[Unit]
-Description=celery workers for DefectDojo
-Requires=dojo.service
-After=dojo.service
-
-[Service]
-ExecStart=/bin/bash -c 'su - dojo -c "cd /opt/dojo/django-DefectDojo && source ../bin/activate && celery -A dojo worker -l info --concurrency 3"'
-Restart=always
-RestartSec=3
-#StandardOutput=syslog
-#StandardError=syslog
-SyslogIdentifier=celeryworker
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-##
-# Create the Celery-beat service file
-#
-run_command log "Creating Celery-beat service file..."
-sudo tee /etc/systemd/system/celery-beat.service > /dev/null << EOF
-[Unit]
-Description=celery beat for DefectDojo
-Requires=dojo.service
-After=dojo.service
-
-[Service]
-ExecStart=/bin/bash -c 'su - dojo -c "cd /opt/dojo/django-DefectDojo && source ../bin/activate && celery beat -A dojo -l info"'
-Restart=always
-RestartSec=3
-#StandardOutput=syslog
-#StandardError=syslog
-SyslogIdentifier=celerybeat
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-##
 # Start and enable the DefectDojo services
 #
 run_command log "Starting and enabling DefectDojo service..."
-run_command sudo systemctl enable --now dojo.service
-sleep 10
-run_command log "Starting and enabling Celery-Worker service..."
-run_command sudo systemctl enable --now celery-worker.service
-sleep 10
-run_command log "Starting and enabling Celery-Beat service..."
-run_command sudo systemctl enable --now celery-beat.service
-sleep 10
+run_command docker compose up -d
+sleep 60
+
+##
+# Add DefectDojo to cron tab
+#
+run_command log "Add DefectDojo to cron tab..."
+run_command crontab -e
+run_command @reboot sleep 60 && /usr/local/bin/docker-compose -f /home/dojo/django-DefectDojo/docker-compose.yml up -d
 
 ##
 # Get vm ip

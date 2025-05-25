@@ -83,8 +83,8 @@ I'm installing my software factory on a simple MacBook, with very little CPU, RA
 providing my VM configuration as an indication, which is sufficient for performing my code audits.
 Of course, if you want a production installation, you'll need to review this VM configuration.
 
-It is recommended to install docker on all four virtual machines, you can check it in a list of software
-that the Ubuntu installer offers you.
+It is mandatory to install docker on Gitlab-ce and DefectDojo virtual machines, you can check it in a list of
+Ubuntu installer software.
 
 ```sh
 --+------------------+------------------+------------------+-------------
@@ -95,6 +95,7 @@ that the Ubuntu installer offers you.
 |2 Vcpu        |   |2 Vcpu        |   |2 Vcpu        |   |2 Vcpu        |
 |2048 Ram      |   |1024 Ram      |   |1024 Ram      |   |1024 Ram      |
 |30 Go disk    |   |15 Go disk    |   |15 Go disk    |   |15 Go disk    |
+|Docker        |   |              |   |Docker        |   |              |
 +--------------+   +--------------+   +--------------+   +--------------+
 ```
 On each VM, it is recommended to install net-tools, which contains a set of programs for controlling

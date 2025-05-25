@@ -77,25 +77,24 @@ This software factory is therefore built on:
 - and finally, a step that allows you to obtain a complete analysis report (DefectDojo).
 
 ## Prerequisites
-This software factory is built on four virtual machines with an Ubuntu 20.04 server-type OS.
+This software factory is built on four Ubuntu 20.04 server-type OS.
 
-I'm installing my software factory on a simple MacBook. I'm therefore providing my VM configuration as an indication,
-which is sufficient for performing my code audits.
+I'm installing my software factory on LattePanda Alpha 864 cards. I'm providing the configuration of each VM
+for reference only, which is sufficient for my code audits.
 
-Of course, if you want a production installation, you'll need to review this configuration.
+Of course, if you want a production installation, you'll need to verify this configuration.
 
-It is mandatory to install docker on Gitlab-ce and DefectDojo virtual machines, you can check it in a list of
-Ubuntu installer software.
+Docker installation is mandatory on Gitlab-ce and DefectDojo virtual machines; you can check this in
+the Ubuntu installation software list.
 
 ```sh
 --+------------------+------------------+------------------+-------------
   |192.168.1.XX      |192.168.1.XX      |192.168.1.XX      |192.168.1.XX
 +-+------------+   +-+------------+   +-+------------+   +-+------------+
-|[ VM1 ]       |   |[ VM2 ]       |   |[ VM3 ]       |   |[ VM4 ]       |
 |(Gitlab-ce)   |   |(Sonarqube)   |   |(DefectDojo)  |   |(Nexus)       |
-|2 CPU         |   |2 CPU         |   |2 CPU         |   |2 CPU         |
-|2048 Ram      |   |1024 Ram      |   |1024 Ram      |   |1024 Ram      |
-|30 Go disk    |   |15 Go disk    |   |15 Go disk    |   |15 Go disk    |
+|Intel® i5     |   |Intel® i5     |   |Intel® i5     |   |Intel® i5     |
+|8GB Memory    |   |8GB Memory    |   |8GB Memory    |   |8GB Memory    |
+|500 Go disk   |   |500 Go disk   |   |500 Go disk   |   |500 Go disk   |
 |Docker        |   |              |   |Docker        |   |              |
 +--------------+   +--------------+   +--------------+   +--------------+
 ```

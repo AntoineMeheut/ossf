@@ -66,8 +66,6 @@ run_command log "Creating DefectDojo service file..."
 sudo tee /etc/systemd/system/dojo.service > /dev/null << EOF
 [Unit]
 Description=uWSGI instance to serve DefectDojo
-Requires=nginx.service
-After=nginx.service
 
 [Service]
 ExecStart=/bin/bash -c 'su - dojo -c "cd /opt/dojo/django-DefectDojo && source ../bin/activate && uwsgi --socket :8001 --wsgi-file wsgi.py --workers 7"'

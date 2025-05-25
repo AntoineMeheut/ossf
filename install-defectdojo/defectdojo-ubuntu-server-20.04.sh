@@ -85,7 +85,7 @@ EOF
 ##
 # Create the Celery service file
 #
-run_command log "Creating Celery service file..."
+run_command log "Creating Celery-worker service file..."
 sudo tee /etc/systemd/system/celery-worker.service > /dev/null << EOF
 [Unit]
 Description=celery workers for DefectDojo
@@ -105,9 +105,9 @@ WantedBy=multi-user.target
 EOF
 
 ##
-# Create the Celery service file
+# Create the Celery-beat service file
 #
-run_command log "Creating Celery service file..."
+run_command log "Creating Celery-beat service file..."
 sudo tee /etc/systemd/system/celery-beat.service > /dev/null << EOF
 [Unit]
 Description=celery beat for DefectDojo
@@ -127,13 +127,15 @@ WantedBy=multi-user.target
 EOF
 
 ##
-# Start and enable the DefectDojo service
+# Start and enable the DefectDojo services
 #
 run_command log "Starting and enabling DefectDojo service..."
 run_command sudo systemctl enable --now dojo.service
 sleep 10
+run_command log "Starting and enabling Celery-Worker service..."
 run_command sudo systemctl enable --now celery-worker.service
 sleep 10
+run_command log "Starting and enabling Celery-Beat service..."
 run_command sudo systemctl enable --now celery-beat.service
 sleep 10
 

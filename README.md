@@ -77,7 +77,7 @@ This software factory is therefore built on:
 - and finally, a step that allows you to obtain a complete analysis report (DefectDojo).
 
 ## Prerequisites
-This software factory is built on four Ubuntu 20.04 server-type OS.
+This software factory is built on three Ubuntu 20.04 server-type OS.
 
 I'm installing my software factory on LattePanda Alpha 864 cards. I'm providing the configuration of each VM
 for reference only, which is sufficient for my code audits.
@@ -88,15 +88,16 @@ Docker installation is mandatory on Gitlab-ce and DefectDojo virtual machines; y
 the Ubuntu installation software list.
 
 ```sh
---+------------------+------------------+------------------+-------------
-  |192.168.1.XX      |192.168.1.XX      |192.168.1.XX      |192.168.1.XX
-+-+------------+   +-+------------+   +-+------------+   +-+------------+
-|(Gitlab-ce)   |   |(Sonarqube)   |   |(DefectDojo)  |   |(Nexus)       |
-|Intel® i5     |   |Intel® i5     |   |Intel® i5     |   |Intel® i5     |
-|8GB Memory    |   |8GB Memory    |   |8GB Memory    |   |8GB Memory    |
-|500 Go disk   |   |500 Go disk   |   |500 Go disk   |   |500 Go disk   |
-|Docker        |   |              |   |Docker        |   |              |
-+--------------+   +--------------+   +--------------+   +--------------+
+--+------------------+------------------+-------------
+  |192.168.1.XX      |192.168.1.XX      |192.168.1.XX 
++-+------------+   +-+------------+   +-+------------+
+|(Gitlab-ce)   |   |(Sonarqube)   |   |(Nexus)       |
+|(DefectDojo)  |   |              |   |              |
+|Intel® i5     |   |Intel® i5     |   |Intel® i5     |
+|8GB Memory    |   |8GB Memory    |   |8GB Memory    |
+|500 Go disk   |   |500 Go disk   |   |500 Go disk   |
+|Docker        |   |Docker        |   |Docker        |
++--------------+   +--------------+   +--------------+
 ```
 
 ### First machine for Gitlab
@@ -106,17 +107,14 @@ The first machine contains:
 - Gitlab secret detection,
 - Gitlab dependency scanning for analyzing imported dependencies,
 - Gitlab SAST for static code security analysis,
-- Gitlab container scan to scan your images.
+- Gitlab container scan to scan your images,
+- DefectDojo, the tool that will enable DevSecOps analysis of your projects.
 
 ### Second machine for Sonarqube
 The second machine contains:
 - Sonarqube for code quality and security analysis.
 
-### Third machine for DefectDojo
-The third machine contains:
-- DefectDojo, the tool that will enable DevSecOps analysis of your projects.
-
-### Fourth machine for Nexus:
+### Third machine for Nexus:
 The fourth machine contains:
 - The Nexus repository where we will store the builds from the CI chain.
 

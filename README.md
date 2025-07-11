@@ -175,10 +175,20 @@ sudo bash ~/nexus-ubuntu-server-20.04.sh
 ## Upload a project to your Gitlab
 Once you have both your servers installed and have verified that you can access the URLs of your Gitlab and Sonarqube instances, upload one or two projects to your Gitlab.
 # TODO
+https://about.gitlab.com/blog/getting-started-with-gitlab-how-to-import-your-projects-to-gitlab/
 
 ## Prepare your Gitlab CI
 Use one of the Gitlab CI templates in this directory or upload your own.
 # TODO
+https://gitlab.com/gitlab-org/gitlab/-/tree/master/lib/gitlab/ci/templates/Jobs
+https://gitlab.com/to-be-continuous/python
+* Gitleaks https://gitlab.com/to-be-continuous/gitleaks
+* Dependency Check https://medium.com/@BuildWithLal/automating-security-in-gitlab-ci-how-to-set-up-dependency-scanning-d6f65c555b4c
+* Sonarqube https://gitlab.com/theslash84/sonarqube-demo
+* Gitlab SAST https://medium.com/@sirigirivijay123/gitlab-sast-the-definitive-guide-to-code-security-209e807eb168
+* Gitlab Container Scan https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/ci/templates/Jobs/Container-Scanning.gitlab-ci.yml
+* SBOM Cyclone DX https://docs.gitlab.com/user/application_security/dependency_scanning/dependency_scanning_sbom/
+* Defecto Dojo https://gitlab.com/to-be-continuous/defectdojo/-/tree/main
 
 <!-- CONTRIBUTING -->
 ## Contributing

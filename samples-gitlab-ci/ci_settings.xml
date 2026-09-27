@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Maven configuration for the Runner job container (VM 1); copy into the application project.
+     Publishes to GitLab; this file configures neither Nexus (VM 3) nor SonarQube (VM 2). -->
+<!-- Copy to the Maven project's root. No static password belongs in this file. -->
+<settings xmlns="http://maven.apache.org/SETTINGS/1.2.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.2.0 https://maven.apache.org/xsd/settings-1.2.0.xsd">
+  <servers>
+    <server>
+      <!-- Match this ID to the distributionManagement repository in pom.xml. -->
+      <id>gitlab-maven</id>
+      <configuration>
+        <httpHeaders>
+          <property>
+            <!-- Temporary token injected by GitLab; no static secrets or config/ossf.env here. -->
+            <name>Job-Token</name>
+            <value>${env.CI_JOB_TOKEN}</value>
+          </property>
+        </httpHeaders>
+      </configuration>
+    </server>
+  </servers>
+</settings>

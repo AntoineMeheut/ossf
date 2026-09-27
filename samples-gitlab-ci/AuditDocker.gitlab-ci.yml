@@ -1,3 +1,6 @@
+# Copy this example into the application project; it runs on a Runner, normally on VM 1.
+# The variables below apply to job containers, not config/ossf.env.
+# GitLab provides CI_REGISTRY_* and CI_COMMIT_*; do not copy VM secrets here.
 # To contribute improvements to CI/CD templates, please follow the Development guide at:
 # https://docs.gitlab.com/development/cicd/templates/
 # This specific template is located at:
@@ -11,21 +14,33 @@
 
 docker-build:
   # Use the official docker image.
-  image: docker:cli
+  image: docker:29.8.1-cli
   stage: build
   services:
-    - docker:dind
+    # Docker daemon dedicated to the job; keep its version aligned with the client above.
+    - name: docker:29.8.1-dind
+      alias: docker
   variables:
+    # Runner: privileged Docker executor with /certs/client shared.
+    # Network alias docker for the dind service; this is not VM 1's DNS name.
+    DOCKER_HOST: tcp://docker:2376
+    # Paths inside the job containers. The Runner must share /certs/client.
+    DOCKER_TLS_CERTDIR: /certs
+    # Verify TLS between the job client and daemon; keep these four settings consistent.
+    DOCKER_TLS_VERIFY: "1"
+    DOCKER_CERT_PATH: /certs/client
+    # Project GitLab registry and normalized branch tag; independent of Nexus on VM 3.
     DOCKER_IMAGE_NAME: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG
+  # Temporary GitLab credentials: pass the password through stdin without logging it.
   before_script:
-    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
+    - printf '%s' "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
   # All branches are tagged with $DOCKER_IMAGE_NAME (defaults to commit ref slug)
   # Default branch is also tagged with `latest`
   script:
     - docker build --pull -t "$DOCKER_IMAGE_NAME" .
     - docker push "$DOCKER_IMAGE_NAME"
     - |
-      if [[ "$CI_COMMIT_BRANCH" == "$CI_DEFAULT_BRANCH" ]]; then
+      if [ "$CI_COMMIT_BRANCH" = "$CI_DEFAULT_BRANCH" ]; then
         docker tag "$DOCKER_IMAGE_NAME" "$CI_REGISTRY_IMAGE:latest"
         docker push "$CI_REGISTRY_IMAGE:latest"
       fi

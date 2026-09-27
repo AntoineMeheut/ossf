@@ -1,16 +1,22 @@
+# This example runs in a Runner Node container (VM 1), not on SonarQube or Nexus.
+# GitLab injects CI_API_V4_URL, CI_PROJECT_* and CI_JOB_TOKEN for this job.
+# Use the GitLab project's registry; do not copy config/ossf.env into the job.
 # To contribute improvements to CI/CD templates, please follow the Development guide at:
 # https://docs.gitlab.com/development/cicd/templates/
 # This specific template is located at:
 # https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/ci/templates/npm.gitlab-ci.yml
 
 publish:
-  image: node:latest
+  image: node:26.10.0
   stage: deploy
   rules:
+    # Publish after package.json changes on the default branch or a vX.Y.Z reference.
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_REF_NAME =~ /^v\d+\.\d+\.\d+.*$/
       changes:
         - package.json
   script:
+    # The CI_JOB_TOKEN reference stays literal in .npmrc and is resolved by npm.
+    # Keep it escaped in echo; do not print .npmrc in the logs.
     # If no .npmrc is included in the repo, generate a temporary one that is configured to publish to GitLab's NPM registry
     - |
       if [[ ! -f .npmrc ]]; then
@@ -20,9 +26,9 @@ publish:
           echo "${CI_API_V4_URL#http*:}/projects/${CI_PROJECT_ID}/packages/npm/:_authToken=\${CI_JOB_TOKEN}"
         } >> .npmrc
       fi
-    - echo "Created the following .npmrc:"; cat .npmrc
 
     # Extract a few values from package.json
+    # Job-local variables derived from the manifest; not VM settings.
     - NPM_PACKAGE_NAME=$(node -p "require('./package.json').name")
     - NPM_PACKAGE_VERSION=$(node -p "require('./package.json').version")
 
@@ -36,6 +42,8 @@ publish:
       fi
 
     # Compare the version in package.json to all published versions.
+    # SIGSTORE_ID_TOKEN is an optional job OIDC token for provenance;
+    # configure it in GitLab CI, not in the OSSF installation secrets.
     # If the package.json version has not yet been published, run `npm publish`.
     # If $SIGSTORE_ID_TOKEN is set this template will generate a provenance
     # document. For more information refer to the documentation: https://docs.gitlab.com/ee/ci/yaml/signing_examples/

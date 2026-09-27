@@ -180,3 +180,9 @@ cython_debug/
 # Misc
 assets/js/dist
 .DS_Store
+
+# Private OSSF credentials (the example is safe to commit).
+# File shared across VMs 1/2/3: exclude secrets and temporary files used during generation.
+# Keep config/ossf.env.example in Git to document variables without their secrets.
+/config/ossf.env
+/config/.ossf-config.*

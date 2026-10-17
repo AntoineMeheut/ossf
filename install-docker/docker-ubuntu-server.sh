@@ -70,8 +70,9 @@ apt-get update
 # Prevent a rerun from implicitly upgrading an existing engine.
 package_version() {
     local package=$1 release=$2 selected current
+    # Consume all output: exiting awk early can give apt-cache SIGPIPE under pipefail.
     selected=$(apt-cache madison "$package" | awk -v release="$release" '
-        { version=$3; sub(/^[0-9]+:/, "", version); if (index(version, release "-") == 1) { print $3; exit } }')
+        !found { version=$3; sub(/^[0-9]+:/, "", version); if (index(version, release "-") == 1) { print $3; found=1 } }')
     [[ -n $selected ]] || die "$package $release is unavailable in the stable Ubuntu 26.04 repository."
     current=$(dpkg-query -W -f='${Version}' "$package" 2>/dev/null || true)
     [[ -z $current || $current == "$selected" ]] || die "Existing $package $current differs from $selected; use the upstream upgrade procedure."

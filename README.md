@@ -241,6 +241,24 @@ Mismatching database/DefectDojo runtime settings are rejected;
 GitLab's initial password option does not reset an existing account. Application
 version upgrades and Ubuntu migrations still follow the publishers' procedures.
 
+If GitLab reports `Configured GitLab password does not match the installed account`
+after `gitlab Reconfigured!`, the final password check failed. Check the configuration
+path printed by the installer (`config/ossf.env` by default, or `OSSF_CONFIG`). To set
+the existing `root` account to that file's `GITLAB_ROOT_PASSWORD`, run the
+[GitLab password reset task](https://docs.gitlab.com/security/reset_user_password/#use-a-rake-task)
+on the GitLab VM:
+
+```sh
+sudo gitlab-rake "gitlab:password:reset[root]"
+```
+
+Enter the exact configured value at both password prompts, then rerun the installer
+with the same configuration file and domain. The task changes the existing account's
+password. Initial-account settings and another `gitlab-ctl reconfigure` cannot do
+this. Configuration values are literal: do not add enclosing quotes or `source`
+the file. The installer preserves its password check and only saves the configuration
+fingerprint after it succeeds.
+
 Version keys select releases for a fresh installation. Changing a default requires
 upstream compatibility review and rerunning the tests; these keys are not an
 application upgrade command.

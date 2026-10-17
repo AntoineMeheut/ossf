@@ -117,13 +117,25 @@ install_package() {
 }
 install_package gitlab-ce "${GITLAB_VERSION:-19.4.1-ce.0}"
 install_package gitlab-runner "${RUNNER_VERSION:-19.4.1-1}"
-gitlab-ctl reconfigure
+# Also provide bootstrap credentials if database initialization was deferred.
+# GitLab ignores these initial-account settings once the root account exists.
+GITLAB_ROOT_EMAIL=$GITLAB_ROOT_EMAIL GITLAB_ROOT_PASSWORD=$GITLAB_ROOT_PASSWORD \
+    gitlab-ctl reconfigure
 systemctl enable --now gitlab-runsvdir gitlab-runner
 wait_http 'http://127.0.0.1/-/readiness?all=1'
 # Verify the configured password in Rails without including it in process arguments.
 # Save the digest only after GitLab is ready and authentication succeeds.
+log "Verifying the GitLab root password using GITLAB_ROOT_PASSWORD from $OSSF_CONFIG."
 OSSF_GITLAB_PASSWORD=$GITLAB_ROOT_PASSWORD gitlab-rails runner \
-    'u = User.find_by_username("root"); abort "Configured GitLab password does not match the installed account" unless u && u.valid_password?(ENV.fetch("OSSF_GITLAB_PASSWORD"))'
+    'u = User.find_by_username("root")
+     abort "GitLab user root was not found; check whether the administrator was renamed or database initialization failed." unless u
+     unless u.valid_password?(ENV.fetch("OSSF_GITLAB_PASSWORD"))
+       warn "Configured GitLab password does not match the installed account."
+       warn "GITLAB_ROOT_PASSWORD only initializes a new account; reconfigure does not reset an existing password."
+       warn "To set the root password to the value in the selected configuration file, run:"
+       warn %q{  sudo gitlab-rake "gitlab:password:reset[root]"}
+       abort "Enter the configured GITLAB_ROOT_PASSWORD at both prompts, then rerun this installer with the same configuration file."
+     end'
 ossf_save_state
 log "GitLab is ready at http://$domain. Configure DNS to point to this server."
 log "Administrator credentials: $OSSF_CONFIG (GITLAB_ADMIN_USER / GITLAB_ROOT_PASSWORD)."

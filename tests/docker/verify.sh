@@ -40,6 +40,7 @@ case ${1:?Specify nexus, sonarqube, gitlab or defectdojo} in
         # VM 1: services and overall readiness; the installer already checks the password in Rails.
         test "$(dpkg-query -W -f='${Version}' gitlab-ce)" = 19.4.1-ce.0
         test "$(dpkg-query -W -f='${Version}' gitlab-runner)" = 19.4.1-1
+        test "$(dpkg-query -W -f='${Version}' gitlab-runner-helper-images)" = 19.4.1-1
         systemctl is-enabled --quiet gitlab-runsvdir gitlab-runner
         systemctl is-active --quiet gitlab-runsvdir gitlab-runner
         curl -fsS 'http://127.0.0.1/-/readiness?all=1' | python3 -c 'import json,sys; assert json.load(sys.stdin)["status"] == "ok"'

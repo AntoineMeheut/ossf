@@ -98,6 +98,7 @@ apt-get update
 # ROOT_EMAIL/ROOT_PASSWORD initialize the root WEB account on the first installation.
 install_package() {
     local name=$1 requested=$2 installed='' package=$1
+    local -a packages
     if dpkg-query -W -f='${Status}' "$name" 2>/dev/null | grep -qx 'install ok installed'; then
         installed=$(dpkg-query -W -f='${Version}' "$name")
         [[ -z $requested || $requested == "$installed" ]] || die "$name $installed is installed; upgrades require the upstream procedure."
@@ -105,8 +106,14 @@ install_package() {
     elif [[ -n $requested ]]; then
         package=$name=$requested
     fi
+    packages=("$package")
+    # APT needs both versions explicitly when Runner is pinned below the latest release.
+    # Use the resolved version so reruns also preserve the installed helper images.
+    if [[ $name == gitlab-runner && $package == *=* ]]; then
+        packages+=("gitlab-runner-helper-images=${package#*=}")
+    fi
     GITLAB_ROOT_EMAIL=$GITLAB_ROOT_EMAIL GITLAB_ROOT_PASSWORD=$GITLAB_ROOT_PASSWORD \
-        EXTERNAL_URL="http://$domain" apt-get install -y "$package"
+        EXTERNAL_URL="http://$domain" apt-get install -y "${packages[@]}"
 }
 install_package gitlab-ce "${GITLAB_VERSION:-19.4.1-ce.0}"
 install_package gitlab-runner "${RUNNER_VERSION:-19.4.1-1}"

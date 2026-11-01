@@ -1,123 +1,178 @@
 <p align="center">
-  <img src="images/ci-cd.png" alt="Open Source Software Factory" width="140" />
+  <img src="images/ci-cd.png" alt="Logo Open Source Software Factory" width="112" />
 </p>
 
-# OSSF — Open Source Software Factory
+# OSSF · Open Source Software Factory
 
-Une fabrique DevSecOps pour installer **GitLab CE, GitLab Runner, SonarQube,
-DefectDojo et Nexus**, puis intégrer des contrôles de qualité et de sécurité dans
-les pipelines de vos applications.
+**Une plateforme DevSecOps de laboratoire, du code aux artefacts approuvés.**
 
-Le dépôt fournit des installateurs Ubuntu et **six modèles GitLab CI génériques**.
-Il vise les laboratoires, les démonstrations et l’évaluation technique en équipe.
-Les applications et leurs résultats restent dans leurs propres dépôts.
+Installez GitLab CE, Runner, SonarQube, DefectDojo et Nexus sur Ubuntu, puis
+intégrez l’un des **six pipelines CI génériques** à votre application.
 
-[Installation](docs/INSTALLATION.md) · [Pipelines CI](docs/CI.md) ·
-[Configuration](docs/CONFIGURATION.md) · [Documentation du code](docs/DEVELOPMENT.md)
+[![Licence MIT](https://img.shields.io/badge/Licence-MIT-blue?style=flat-square)](LICENSE)
+[![Ubuntu Server 26.04 LTS](https://img.shields.io/badge/Ubuntu-26.04_LTS-E95420?style=flat-square&logo=ubuntu&logoColor=white)](docs/INSTALLATION.md)
+[![Pipelines GitLab CI](https://img.shields.io/badge/GitLab-CI-FC6D26?style=flat-square&logo=gitlab&logoColor=white)](samples-gitlab-ci/README.md)
 
-## Fonctionnalités
+[Commencer](#démarrage-rapide) · [Choisir un pipeline](#pipelines-disponibles) ·
+[Documentation](#documentation) · [Signaler un problème](https://github.com/AntoineMeheut/ossf/issues)
 
-- **Installation versionnée** : versions définies dans le code, vérification
-  des archives, services systemd et contrôles de disponibilité.
-- **Configuration centralisée** : secrets générés une seule fois dans un fichier
-  privé, lu comme des données et partagé entre les machines.
-- **Contrôles CI** : tests, couverture, détection de secrets, SAST, analyse des
-  dépendances, SonarQube, construction et analyse des images.
-- **Traçabilité** : SBOM CycloneDX, rapports conservés dans GitLab et regroupés
-  dans un engagement DefectDojo par exécution.
-- **Publication contrôlée** : approbation liée au commit et aux empreintes SHA-256,
-  puis écriture et relecture des artefacts dans Nexus.
+<details>
+<summary><strong>Sommaire</strong></summary>
 
-## Architecture
+- [Présentation](#présentation)
+- [Prérequis et compatibilité](#prérequis-et-compatibilité)
+- [Démarrage rapide](#démarrage-rapide)
+- [Pipelines disponibles](#pipelines-disponibles)
+- [Architecture](#architecture)
+- [Documentation](#documentation)
+- [Structure du dépôt](#structure-du-dépôt)
+- [Tests et validation](#tests-et-validation)
+- [Contribuer et obtenir de l’aide](#contribuer-et-obtenir-de-laide)
+- [Licence](#licence)
 
-La topologie proposée utilise trois machines :
+</details>
 
-| Machine | Services | Accès applicatifs par défaut |
-| --- | --- | --- |
-| 1 | GitLab CE, Runner, Docker, DefectDojo | GitLab : `80` ; DefectDojo : `8088` |
-| 2 | SonarQube et PostgreSQL local | SonarQube : `9000` |
-| 3 | Nexus Repository | Nexus : `8081` |
+## Présentation
 
-```mermaid
-flowchart LR
-    A[Code de votre application] --> B[GitLab CI : tests et construction]
-    B --> C[Scans de sécurité et SBOM]
-    B --> D[SonarQube]
-    C --> E[DefectDojo et barrière qualité]
-    D --> E
-    E -->|Approbation| F[Nexus : image et artefacts]
-    E -->|Refus| G[Rapports conservés dans GitLab]
-```
+OSSF s’adresse aux équipes qui souhaitent construire un laboratoire DevSecOps,
+réaliser une démonstration ou évaluer une chaîne de livraison contrôlée.
+Le dépôt fournit les scripts d’installation et les modèles CI à adapter à vos
+sources, vos tests et votre environnement.
 
-L’installation des services et la configuration des intégrations CI sont deux
-opérations distinctes. Les installateurs ne créent pas de projets applicatifs,
-n’enregistrent pas de Runner et ne déploient pas les applications.
+| Besoin | Fonctionnalité fournie |
+| --- | --- |
+| Déployer les outils | Cinq installateurs Ubuntu, versions définies et contrôles de disponibilité |
+| Centraliser la configuration | Un fichier privé avec génération des secrets et lecture littérale |
+| Contrôler le code | Tests, couverture, Secret Detection, SAST et SonarQube |
+| Examiner les dépendances | Audits adaptés au langage et inventaires CycloneDX |
+| Vérifier les images | Construction depuis les artefacts testés, contrôle runtime et Container Scanning |
+| Décider d’une publication | Rapports regroupés dans DefectDojo et politique de refus dans le CI |
+| Conserver les livrables | Publication Nexus liée au commit et aux empreintes SHA-256, puis relecture |
 
-Consultez l’[architecture détaillée](docs/ARCHITECTURE.md) pour les flux, les ports
-et la séparation des bases de données.
+L’installation des services précède la configuration des intégrations :
+l’enregistrement du Runner, les projets applicatifs et les accès CI sont à
+préparer selon le [guide d’intégration](docs/CI.md).
 
-<a id="gitlab-ci-examples"></a>
+## Prérequis et compatibilité
 
-## Choisir un modèle CI
+| Usage | Prérequis |
+| --- | --- |
+| Installation des services | Ubuntu Server **26.04**, systemd actif, accès root et Internet |
+| Architecture des installateurs | **amd64** ou **arm64** ; validation native documentée sur Ubuntu 26.04.1 ARM64 |
+| Préparation des fichiers | Git, Python 3 ; Bash et OpenSSL pour générer la configuration privée |
+| Analyseurs officiels GitLab | Runner Docker **Linux AMD64** ; l’émulation ARM se qualifie séparément |
+| Exécution des pipelines | Runner de projet protégé, références protégées et accès dédiés aux services |
 
-| Profil | Projet cible | Tests et construction | Livrable applicatif |
-| --- | --- | --- | --- |
-| [Python](samples-gitlab-ci/python/.gitlab-ci.yml) | Paquet Python, sans framework imposé | pytest, coverage.py, PEP 517 | Wheel conservé dans une archive |
-| [Django](samples-gitlab-ci/django/.gitlab-ci.yml) | Application Django | Tests Django, couverture, Gunicorn | Image applicative |
-| [Java](samples-gitlab-ci/java/.gitlab-ci.yml) | Application Java/Maven | JUnit, JaCoCo, JAR exécutable | JAR et image |
-| [Angular](samples-gitlab-ci/angular/.gitlab-ci.yml) | SPA Angular avec npm | Scripts `test:ci` et `build:ci` | Image Nginx du bundle testé |
-| [Angular + Java](samples-gitlab-ci/angular-java/.gitlab-ci.yml) | Frontend Angular et backend Java/Maven | Tests et couverture des deux composants | Deux images et un JAR |
-| [C](samples-gitlab-ci/c/.gitlab-ci.yml) | Application C avec CMake et Conan 2 | CTest, gcovr, Cppcheck | Arborescence installée et image |
+> [!IMPORTANT]
+> Le profil **C** utilise Cppcheck pour le SAST et nécessite **SonarQube CFamily**
+> pour l’analyse de code. L’édition Community Build installée par défaut ne couvre
+> pas cette étape. Consultez les [prérequis du profil C](docs/CI.md#profil-c).
 
-**Compatibilité des éditions.** Les modèles utilisent des alternatives à
-Dependency Scanning Ultimate : pip-audit, npm audit, OWASP Dependency-Check ou
-Grype selon le profil. Pour C, le SAST utilise Cppcheck et l’étape SonarQube exige
-un analyseur **CFamily** ; SonarQube Community Build ne couvre pas cette étape.
-Le pipeline vérifie ce prérequis avant de poursuivre.
+Les installateurs préparent un laboratoire HTTP. Les accès, le TLS, la supervision,
+les sauvegardes et la qualification de charge sont à configurer avant une
+utilisation en production.
 
-Le [guide CI](docs/CI.md) détaille les six profils, les variables à renseigner,
-les règles de refus et les adaptations nécessaires à votre projet.
+## Démarrage rapide
 
-## Démarrage
-
-### Installer la plateforme
-
-Depuis le poste d’administration :
+### 1. Récupérer le dépôt
 
 ```sh
 git clone https://github.com/AntoineMeheut/ossf.git
 cd ossf
-bash scripts/init-config.sh
 ```
 
-Renseignez le domaine et les adresses électroniques dans `config/ossf.env`, puis
-copiez le dépôt et **le même fichier privé**, avec les permissions `600`, sur les
-machines Ubuntu. Suivez ensuite l’[ordre d’installation](docs/INSTALLATION.md).
+### 2. Choisir votre point d’entrée
 
-Les scripts ciblent **Ubuntu Server 26.04**, avec systemd, sur **amd64 ou arm64**.
-La validation native documentée utilise Ubuntu 26.04.1 ARM64. Les analyseurs
-officiels GitLab nécessitent un Runner Linux AMD64 ; l’émulation ARM est un cas
-distinct à qualifier.
+#### Installer la plateforme
 
-### Intégrer un pipeline à votre application
-
-Depuis le dépôt OSSF, préparez par exemple le profil Python :
+Sur le poste d’administration, générez la configuration une seule fois :
 
 ```sh
+bash scripts/init-config.sh
+chmod 600 config/ossf.env
+```
+
+Renseignez le domaine et les adresses électroniques dans `config/ossf.env`.
+Copiez ensuite le dépôt complet et **le même fichier privé** sur les VM Ubuntu,
+puis exécutez les commandes du [guide d’installation](docs/INSTALLATION.md).
+
+Le [guide de configuration](docs/CONFIGURATION.md) décrit les 31 paramètres et
+leurs contraintes. Le fichier privé est lu comme des données : ne le chargez
+pas avec `source` et ne le commitez pas.
+
+#### Ajouter un pipeline à votre application
+
+Si vos services sont prêts, assemblez le profil correspondant à votre projet :
+
+```sh
+# Exemple : application Python. La destination doit être nouvelle.
 python3 samples-gitlab-ci/security/prepare-example.py python /tmp/python-ci-overlay
 ```
 
-Les profils disponibles sont `python`, `django`, `java`, `angular`, `angular-java`
-et `c`. La destination doit être nouvelle. L’outil assemble le modèle et son
-helper partagé `ci/pipeline.py` ; il ne lit pas le code de votre application.
+Remplacez `python` par `django`, `java`, `angular`, `angular-java` ou `c` selon le
+projet. L’outil ajoute le helper partagé `ci/pipeline.py` et copie uniquement
+les fichiers du modèle.
 
-Examinez les fichiers produits, fusionnez-les dans votre dépôt applicatif, puis
-configurez le Runner et les accès aux services conformément au [guide CI](docs/CI.md).
-Conservez vos sources, vos tests et vos manifestes de dépendances.
+1. Examinez l’overlay et fusionnez-le dans votre dépôt applicatif.
+2. Adaptez les chemins, les commandes de tests et le contrat de démarrage.
+3. Configurez le Runner et les [variables CI protégées](docs/CI.md#variables-ci).
+4. Validez le YAML dans GitLab, puis exécutez le pipeline avec votre code.
 
-## Versions par défaut
+Les instructions propres à chaque langage sont dans le [guide CI](docs/CI.md).
 
-| Composant | Version définie dans le dépôt |
+<a id="gitlab-ci-examples"></a>
+<a id="choisir-un-modèle-ci"></a>
+
+## Pipelines disponibles
+
+| Profil | Projet cible | Tests et build | Livrables |
+| --- | --- | --- | --- |
+| [Python](samples-gitlab-ci/python/.gitlab-ci.yml) | Paquet Python PEP 517 | pytest, coverage.py, wheel | Image et wheel dans une archive |
+| [Django](samples-gitlab-ci/django/.gitlab-ci.yml) | Application Django | Tests Django, couverture, Gunicorn | Image applicative |
+| [Java](samples-gitlab-ci/java/.gitlab-ci.yml) | Application Java/Maven | JUnit, JaCoCo, JAR exécutable | Image et JAR |
+| [Angular](samples-gitlab-ci/angular/.gitlab-ci.yml) | SPA Angular avec npm | Scripts `test:ci` et `build:ci` | Image Nginx du bundle testé |
+| [Angular + Java](samples-gitlab-ci/angular-java/.gitlab-ci.yml) | Frontend Angular et backend Maven | Tests et couverture des deux composants | Deux images et un JAR |
+| [C](samples-gitlab-ci/c/.gitlab-ci.yml) | Application CMake et Conan 2 | CTest, gcovr, Cppcheck | Image et installation empaquetée |
+
+Chaque profil produit des **SBOM CycloneDX**, regroupe ses rapports dans
+**DefectDojo** et applique une barrière avant publication dans **Nexus**.
+Les alternatives CE à Dependency Scanning Ultimate sont pip-audit, npm audit,
+OWASP Dependency-Check ou Grype selon le langage.
+
+Un scan réussi peut contenir des alertes. La publication exige une décision
+favorable de la barrière, puis la vérification des fichiers approuvés.
+Consultez la [politique de livraison](docs/CI.md#rapports-et-décision-de-publication)
+et le [catalogue des modèles](samples-gitlab-ci/README.md).
+
+## Architecture
+
+La topologie proposée répartit les services sur trois machines :
+
+| Machine | Services | Ports applicatifs par défaut |
+| --- | --- | --- |
+| 1 | GitLab CE, Runner, Docker et DefectDojo | GitLab `80` · DefectDojo `8088` |
+| 2 | SonarQube et PostgreSQL local | SonarQube `9000` |
+| 3 | Nexus Repository | Nexus `8081` |
+
+```mermaid
+flowchart LR
+    A["Code applicatif"] --> B["GitLab CI : tests et construction"]
+    B --> C["Scans de sécurité et SBOM"]
+    B --> D["SonarQube"]
+    C --> E["DefectDojo et décision CI"]
+    D --> E
+    E -->|Approbation| F["Nexus : artefacts vérifiés"]
+    E -->|Refus| G["Rapports dans GitLab"]
+```
+
+Le [guide d’architecture](docs/ARCHITECTURE.md) détaille les flux réseau, la
+séparation des bases de données et les frontières de confiance. Le déploiement
+et l’exploitation de vos applications restent propres à votre environnement.
+
+<details>
+<summary><strong>Versions de la plateforme définies dans le dépôt</strong></summary>
+
+| Composant | Version par défaut |
 | --- | --- |
 | GitLab CE / Runner | `19.4.1` / `19.4.1` |
 | SonarQube Community Build | `26.9.0.129388` |
@@ -125,44 +180,47 @@ Conservez vos sources, vos tests et vos manifestes de dépendances.
 | DefectDojo | `3.3.200` |
 | Docker Engine / Compose | `29.8.1` / `5.5.1` |
 
-SonarQube utilise OpenJDK 25 et PostgreSQL 18 ; Nexus utilise son Java embarqué.
-Les versions et empreintes sont des valeurs du dépôt, pas une promesse de mise à
-jour automatique. Leur modification nécessite une vérification de compatibilité
-et une procédure de migration adaptée aux services existants.
+SonarQube utilise OpenJDK 25 et PostgreSQL 18 ; Nexus conserve son Java embarqué.
+Les valeurs de référence figurent dans
+[`config/ossf.env.example`](config/ossf.env.example) et les installateurs.
+Tout changement de version demande un examen de compatibilité, des tests et la
+procédure de migration du produit concerné.
+
+</details>
 
 ## Documentation
 
-| Guide | Contenu |
+| Guide | À consulter pour… |
 | --- | --- |
-| [Installation](docs/INSTALLATION.md) | Prérequis, commandes par machine, versions et premier accès |
-| [Configuration](docs/CONFIGURATION.md) | Format du fichier privé, référence des paramètres et gestion des secrets |
-| [Pipelines CI](docs/CI.md) | Intégration des six profils, Runner, variables, rapports et Nexus |
-| [Architecture](docs/ARCHITECTURE.md) | Responsabilités, flux réseau et frontières de confiance |
-| [Exploitation](docs/OPERATIONS.md) | Diagnostic, réexécution, sauvegardes et changements de version |
-| [Développement](docs/DEVELOPMENT.md) | Organisation du code, API des helpers et vérifications |
-| [Validation](docs/VALIDATION.md) | Vérifications réalisées, portée et limites |
-| [Contribution](CONTRIBUTING.md) | Préparer une modification ou signaler un problème |
+| [Installation](docs/INSTALLATION.md) | Préparer les VM et installer les services dans le bon ordre |
+| [Configuration](docs/CONFIGURATION.md) | Comprendre les paramètres et gérer les secrets |
+| [Pipelines CI](docs/CI.md) | Adapter un profil, configurer le Runner et publier les artefacts |
+| [Architecture](docs/ARCHITECTURE.md) | Comprendre les responsabilités et les flux |
+| [Exploitation](docs/OPERATIONS.md) | Diagnostiquer, réexécuter et préparer les sauvegardes |
+| [Développement](docs/DEVELOPMENT.md) | Lire les contrats des helpers et modifier le code |
+| [Validation](docs/VALIDATION.md) | Identifier les contrôles exécutés et leurs limites |
 
-## Organisation du dépôt
+## Structure du dépôt
 
 ```text
-config/ossf.env.example   Référence publique de configuration
-install-*/               Installateurs Ubuntu des cinq composants
-scripts/                 Configuration partagée et exploitation de DefectDojo
-samples-gitlab-ci/        Six modèles CI et helpers partagés
-tests/docker/            Tests des installateurs dans Ubuntu avec systemd
-docs/                    Guides d’utilisation et documentation technique
+ossf/
+├── config/ossf.env.example   Référence publique de configuration
+├── install-*/               Cinq installateurs Ubuntu
+├── scripts/                 Configuration partagée et wrapper DefectDojo
+├── samples-gitlab-ci/        Six profils CI et helpers
+├── tests/docker/            Tests des installateurs avec systemd
+├── docs/                    Guides d’utilisation et documentation technique
+├── CONTRIBUTING.md          Guide de contribution
+└── LICENSE                  Licence MIT du dépôt
 ```
 
-`config/ossf.env` et `config/ci-*.env` sont exclus de Git. Les identifiants
-d’administration ne doivent pas devenir des variables CI applicatives.
+## Tests et validation
 
-## Vérification et contribution
+Les helpers CI disposent de **39 tests unitaires**. La compilation YAML, les
+fixtures applicatives et les contrôles des images complètent ces vérifications
+sur les périmètres documentés dans le [guide de validation](docs/VALIDATION.md).
 
-Les helpers partagés disposent de **39 tests**. Les modèles récents ont également
-été vérifiés avec des fixtures jetables et des images exécutées sans root.
-Consultez la [portée exacte de validation](docs/VALIDATION.md) avant de réutiliser
-un résultat comme preuve d’intégration de votre application.
+Pour exécuter les tests de politique et de publication simulée :
 
 ```sh
 python3 -m venv /tmp/ossf-policy-tests
@@ -171,14 +229,24 @@ python3 -m venv /tmp/ossf-policy-tests
   -s samples-gitlab-ci/security -p 'test_*.py'
 ```
 
-Les [tests Docker](tests/docker/README.md) couvrent les installateurs, leurs
-réexécutions et plusieurs chemins d’échec. Les contributions suivent le
-[guide de contribution](CONTRIBUTING.md).
+Pour les installateurs, consultez les [tests Docker](tests/docker/README.md).
+Chaque application doit qualifier son pipeline complet avec ses dépendances,
+ses services, ses droits et ses contrats de démarrage.
+
+## Contribuer et obtenir de l’aide
+
+Les corrections, améliorations et nouveaux profils sont les bienvenus.
+Commencez par le [guide de contribution](CONTRIBUTING.md).
+
+Pour signaler un problème, ouvrez une
+[issue](https://github.com/AntoineMeheut/ossf/issues) avec les versions,
+l’architecture, le profil et des journaux expurgés. Conservez les secrets et le
+code applicatif confidentiel hors des issues et contributions publiques.
+
+**Mainteneur :** [Antoine Meheut](https://github.com/AntoineMeheut).
 
 ## Licence
 
-Le code de ce dépôt est distribué sous [licence MIT](LICENSE). Les services et
-outils intégrés conservent leurs propres licences et conditions d’utilisation.
-Les scripts installent par défaut un laboratoire HTTP ; une mise en production
-demande une configuration adaptée du TLS, des accès, des sauvegardes et de la
-supervision.
+Le code de ce dépôt est distribué sous [licence MIT](LICENSE).
+Les produits et outils intégrés conservent leurs propres licences ; leurs
+conditions d’utilisation s’appliquent séparément.

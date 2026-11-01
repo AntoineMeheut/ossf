@@ -1,6 +1,6 @@
 # Shared security CI helpers
 
-The repository provides generic Django and Angular CI overlays. The full setup,
+The repository provides generic Django, Angular and Angular + Java CI overlays. The full setup,
 project adaptation, Runner configuration, CI variable reference, release policy
 and troubleshooting guide are in the root [README.md](../../README.md#gitlab-ci-examples).
 

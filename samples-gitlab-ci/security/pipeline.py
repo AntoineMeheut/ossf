@@ -27,12 +27,30 @@ SEVERITIES = ("Critical", "High", "Medium", "Low", "Info")
 
 
 def reports():
+    if os.environ.get("OSSF_PROFILE") == "angular-java":
+        return (
+            *REPORTS[:2],
+            ("reports/npm-audit.json", "NPM Audit v7+ Scan", "vulnerabilities"),
+            *((f"reports/{part}/dependency-check-report.xml", "Dependency Check Scan", "dependencies") for part in ("frontend", "backend")),
+            *((f"reports/{part}-sbom.cdx.json", "CycloneDX Scan", "components") for part in ("frontend", "backend")),
+            *((f"reports/{part}-container.json", "GitLab Container Scan", "vulnerabilities") for part in ("frontend", "backend")),
+            *((f"reports/{part}-container-sbom.cdx.json", "CycloneDX Scan", "components") for part in ("frontend", "backend")),
+            REPORTS[-1],
+        )
     if os.environ.get("OSSF_PROFILE") == "angular":
         return tuple(("reports/npm-audit.json", "NPM Audit v7+ Scan", "vulnerabilities")
                      if item[0] == "reports/pip-audit.json" else item for item in REPORTS)
     if os.environ.get("OSSF_PROFILE", "django") != "django":
-        raise ValueError("OSSF_PROFILE must be django or angular")
+        raise ValueError("OSSF_PROFILE must be django, angular or angular-java")
     return REPORTS
+
+
+def assets():
+    if os.environ.get("OSSF_PROFILE") == "angular-java":
+        return ("dist/frontend-image.tar", "dist/backend-image.tar", ".ci-dist/backend/application.jar",
+                "reports/frontend-sbom.cdx.json", "reports/backend-sbom.cdx.json",
+                "reports/frontend-container-sbom.cdx.json", "reports/backend-container-sbom.cdx.json")
+    return ("dist/image.tar", "reports/application-sbom.cdx.json", "gl-sbom-report.cdx.json")
 
 
 def required(name):
@@ -91,10 +109,14 @@ class API:
 def validate_reports():
     for filename, _, key in reports():
         if filename.endswith("dependency-check-report.xml"):
-            data = read_json("reports/dependency-check-report.json")
+            data = read_json(Path(filename).with_suffix(".json"))
             validate_dependency_check(data)
             if os.environ.get("OSSF_PROFILE") == "angular":
-                validate_npm_dependency_inventory(data)
+                validate_dependency_inventory(data)
+            if os.environ.get("OSSF_PROFILE") == "angular-java":
+                part = Path(filename).parent.name
+                validate_dependency_inventory(data, f"reports/{part}-sbom.cdx.json",
+                                                  "npm" if part == "frontend" else "maven")
             root = ElementTree.parse(filename).getroot()
             dependencies = root.find("{*}dependencies")
             if root.tag.split("}")[-1] != "analysis" or dependencies is None or len(dependencies) != len(data["dependencies"]):
@@ -116,7 +138,9 @@ def validate_reports():
                 raise ValueError("pip-audit skipped a dependency or produced no inventory")
         if filename.endswith("dependency-check-report.json"):
             validate_dependency_check(data)
-    return {filename: digest(filename) for filename in [*(item[0] for item in reports()), "reports/dependency-check-report.json"]}
+    paths = [item[0] for item in reports()]
+    paths.extend(str(Path(path).with_suffix(".json")) for path in list(paths) if path.endswith(".xml"))
+    return {filename: digest(filename) for filename in paths}
 
 
 def validate_dependency_check(data):
@@ -137,21 +161,21 @@ def validate_npm_audit(data):
         raise ValueError("npm audit inventory/counts/severities are incomplete")
 
 
-def validate_npm_dependency_inventory(data):
-    # A lock file without sibling node_modules produced only a placeholder in a
-    # real run. Require every npm identity from the installed-app SBOM in ODC.
+def validate_dependency_inventory(data, sbom="reports/application-sbom.cdx.json", ecosystem="npm"):
+    # Require every ecosystem identity from the application SBOM in OWASP.
+    # This catches npm lock placeholders and Java scans with incomplete GAV IDs.
     def purls(value):
-        if isinstance(value, str) and value.startswith("pkg:npm/"):
+        if isinstance(value, str) and value.startswith(f"pkg:{ecosystem}/"):
             return {unquote(value).split("?", 1)[0].split("#", 1)[0]}
         if isinstance(value, dict):
             return set().union(set(), *(purls(item) for item in value.values()))
         if isinstance(value, list):
             return set().union(set(), *(purls(item) for item in value))
         return set()
-    expected = purls(read_json("reports/application-sbom.cdx.json").get("components", []))
+    expected = purls(read_json(sbom).get("components", []))
     actual = purls(data["dependencies"])
     if not expected or not expected.issubset(actual):
-        raise ValueError(f"Dependency-Check npm inventory incomplete: {len(expected - actual)} SBOM identities missing")
+        raise ValueError(f"Dependency-Check {ecosystem} inventory incomplete: {len(expected - actual)} SBOM identities missing")
 
 
 def audit():
@@ -282,12 +306,12 @@ def gate():
     blocked = sum(counts[name] for name in SEVERITIES[:SEVERITIES.index(threshold) + 1])
     unknown_severities = sum(
         finding.get("severity") not in SEVERITIES
-        for filename, _, key in reports() if key == "vulnerabilities" and filename.startswith("gl-")
+        for filename, scan_type, key in reports() if key == "vulnerabilities" and scan_type.startswith("GitLab ")
         for finding in read_json(filename)[key]
     )
     # pip-audit does not supply CVSS severity for every advisory. Never allow an
     # advisory merely because the importer assigned it a lower/default severity.
-    if os.environ.get("OSSF_PROFILE") == "angular":
+    if os.environ.get("OSSF_PROFILE") in ("angular", "angular-java"):
         dependency_findings = len(read_json("reports/npm-audit.json")["vulnerabilities"])
     else:
         dependency_findings = sum(len(item.get("vulns", [])) for item in read_json("reports/pip-audit.json")["dependencies"])
@@ -299,7 +323,7 @@ def gate():
     if blocked or dependency_findings or unknown_severities or summary["sonar_quality_gate"] != "OK":
         raise ValueError("Quality barrier refused publication; see reports/gate-summary.json")
     approval = {"commit": required("CI_COMMIT_SHA"), "pipeline": required("CI_PIPELINE_ID"), **summary,
-                "assets": {path: digest(path) for path in ("dist/image.tar", "reports/application-sbom.cdx.json", "gl-sbom-report.cdx.json")}}
+                "assets": {path: digest(path) for path in assets()}}
     write_json("reports/approval.json", approval)
 
 
@@ -307,6 +331,8 @@ def publish():
     approval = read_json("reports/approval.json")
     if approval["commit"] != required("CI_COMMIT_SHA") or approval["pipeline"] != required("CI_PIPELINE_ID"):
         raise ValueError("Approval belongs to another commit/pipeline")
+    if set(approval["assets"]) != set(assets()):
+        raise ValueError("Approval does not cover the profile's complete artifact set")
     for path, expected in approval["assets"].items():
         if digest(path) != expected:
             raise ValueError(f"Approved artifact changed: {path}")

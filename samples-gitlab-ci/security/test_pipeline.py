@@ -172,7 +172,7 @@ class GateTests(unittest.TestCase):
         self.npm_inventory()
         p.write_json("reports/dependency-check-report.json", {"dependencies": [{"fileName": "package-lock.json"}]})
         with self.assertRaisesRegex(ValueError, "inventory incomplete"):
-            p.validate_npm_dependency_inventory(p.read_json("reports/dependency-check-report.json"))
+            p.validate_dependency_inventory(p.read_json("reports/dependency-check-report.json"))
 
     def test_tampered_artifact_is_never_uploaded(self):
         self.run_gate()
@@ -181,26 +181,105 @@ class GateTests(unittest.TestCase):
             p.publish()
         api.assert_not_called()
 
-    def test_publisher_uploads_the_approved_bytes_and_checks_readback(self):
+    def fullstack_inventory(self):
+        os.environ["OSSF_PROFILE"] = "angular-java"
+        for filename, _, key in p.reports():
+            if filename.endswith(".xml"):
+                part = Path(filename).parent.name
+                ecosystem = "npm" if part == "frontend" else "maven"
+                purl = f"pkg:{ecosystem}/example@1"
+                Path(filename).parent.mkdir(parents=True, exist_ok=True)
+                Path(filename).write_text("<analysis><dependencies><dependency/></dependencies></analysis>")
+                p.write_json(Path(filename).with_suffix(".json"), {"dependencies": [{"packages": [{"id": purl}]}]})
+                p.write_json(f"reports/{part}-sbom.cdx.json", {"bomFormat": "CycloneDX", "components": [{"purl": purl}]})
+            elif "-sbom.cdx.json" in filename:
+                if not Path(filename).exists():
+                    p.write_json(filename, {"bomFormat": "CycloneDX", "components": [{"name": "example"}]})
+            elif filename == "reports/npm-audit.json":
+                p.write_json(filename, {"auditReportVersion": 2, "vulnerabilities": {},
+                             "metadata": {"dependencies": {"total": 1}, "vulnerabilities": {"total": 0}}})
+            elif filename.endswith("-container.json"):
+                p.write_json(filename, {"scan": {"status": "success"}, "vulnerabilities": []})
+        for path in p.assets():
+            if not Path(path).exists():
+                Path(path).parent.mkdir(parents=True, exist_ok=True)
+                Path(path).write_bytes(b"test-image-or-jar")
+
+    def test_fullstack_approval_covers_both_images_jar_and_four_sboms(self):
+        self.fullstack_inventory()
         self.run_gate()
-        stored = {}
-        api = MagicMock()
+        approval = p.read_json("reports/approval.json")
+        self.assertEqual(len(approval["tests"]), 12)
+        self.assertEqual(len(approval["assets"]), 7)
+        self.assertIn("reports/backend/dependency-check-report.json", approval["reports"])
 
-        def transfer(method, target, **kwargs):
-            response = MagicMock()
-            if method == "PUT":
-                stored[target] = kwargs["data"].read()
-            else:
-                response.iter_content.return_value = [stored[target]]
-            return response
+    def test_missing_backend_scan_cannot_release_frontend_alone(self):
+        self.fullstack_inventory()
+        Path("reports/backend-container.json").unlink()
+        with self.assertRaises(OSError):
+            self.run_gate()
+        self.api.json.assert_not_called()
 
-        api.request.side_effect = transfer
-        with patch.dict(os.environ, {"NEXUS_URL": "https://nexus.invalid", "NEXUS_USER": "test",
-                                     "NEXUS_PASSWORD": "test-only-placeholder", "NEXUS_REPOSITORY": "ci"}), \
-                patch.object(p, "API", return_value=api):
+    def test_backend_maven_inventory_must_cover_sbom(self):
+        self.fullstack_inventory()
+        p.write_json("reports/backend/dependency-check-report.json", {"dependencies": [{"fileName": "placeholder.jar"}]})
+        with self.assertRaisesRegex(ValueError, "maven inventory incomplete"):
+            self.run_gate()
+
+    def test_backend_unknown_container_severity_cannot_be_downgraded(self):
+        self.fullstack_inventory()
+        p.write_json("reports/backend-container.json", {"scan": {"status": "success"},
+                     "vulnerabilities": [{"severity": "Unknown"}]})
+        with self.assertRaises(ValueError):
+            self.run_gate()
+        self.assertEqual(p.read_json("reports/gate-summary.json")["unknown_scanner_severities"], 1)
+
+    def test_changed_backend_jar_cannot_be_published(self):
+        self.fullstack_inventory()
+        self.run_gate()
+        Path(".ci-dist/backend/application.jar").write_bytes(b"changed")
+        with patch.object(p, "API") as api, self.assertRaises(ValueError):
             p.publish()
-        self.assertEqual(len(stored), 4)
-        self.assertIn(b"unit-test-artifact", stored.values())
+        api.assert_not_called()
+
+    def test_partial_fullstack_approval_is_rejected(self):
+        self.fullstack_inventory()
+        self.run_gate()
+        approval = p.read_json("reports/approval.json")
+        del approval["assets"]["dist/backend-image.tar"]
+        p.write_json("reports/approval.json", approval)
+        with patch.object(p, "API") as api, self.assertRaises(ValueError):
+            p.publish()
+        api.assert_not_called()
+
+    def test_publisher_uploads_the_approved_bytes_and_checks_readback(self):
+        for profile, expected_count in (("django", 4), ("angular-java", 8)):
+            with self.subTest(profile=profile):
+                if profile == "angular-java":
+                    self.fullstack_inventory()
+                self.run_gate()
+                stored = {}
+                api = MagicMock()
+
+                def transfer(method, target, **kwargs):
+                    response = MagicMock()
+                    if method == "PUT":
+                        stored[target] = kwargs["data"].read()
+                    else:
+                        response.iter_content.return_value = [stored[target]]
+                    return response
+
+                api.request.side_effect = transfer
+                with patch.dict(os.environ, {"NEXUS_URL": "https://nexus.invalid", "NEXUS_USER": "test",
+                                             "NEXUS_PASSWORD": "test-only-placeholder", "NEXUS_REPOSITORY": "ci"}), \
+                        patch.object(p, "API", return_value=api):
+                    p.publish()
+                self.assertEqual(len(stored), expected_count)
+                self.assertTrue(list(stored)[-1].endswith("/approval.json"))
+                self.assertEqual(sum(c.args[0] == "GET" for c in api.request.call_args_list), expected_count)
+                for path in p.assets():
+                    target = next(key for key in stored if key.endswith("/" + Path(path).name))
+                    self.assertEqual(stored[target], Path(path).read_bytes())
 
     def test_incomplete_pagination_blocks(self):
         api = MagicMock()

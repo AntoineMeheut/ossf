@@ -269,8 +269,9 @@ application upgrade command.
 
 ## GitLab CI examples
 
-Two reusable examples are provided: [Django](samples-gitlab-ci/django/.gitlab-ci.yml)
-and [Angular](samples-gitlab-ci/angular/.gitlab-ci.yml). They contain CI configuration
+Three reusable examples are provided: [Django](samples-gitlab-ci/django/.gitlab-ci.yml),
+[Angular](samples-gitlab-ci/angular/.gitlab-ci.yml) and
+[Angular + Java](samples-gitlab-ci/angular-java/.gitlab-ci.yml). They contain CI configuration
 and helper scripts, with no application source, project-specific tests or private
 execution reports. Integrate an example into your own application's GitLab repository.
 
@@ -290,6 +291,13 @@ execution reports. Integrate an example into your own application's GitLab repos
 | Release barrier | Import eight reports into DefectDojo and evaluate the policy | Same |
 | Publication | Upload the approved image, both SBOMs and approval evidence to Nexus | Same |
 
+The Angular + Java profile extends the Angular checks with Maven/JUnit tests,
+JaCoCo coverage and a Maven CycloneDX SBOM. OWASP checks both dependency inventories.
+SonarQube analyzes TypeScript and Java together. Two separate runtime images are
+built and smoke-tested, then scanned by two official GitLab Container Scanning
+jobs. The barrier requires **twelve reports** and approves both images, the Java
+JAR and four SBOMs together before Nexus publication.
+
 GitLab CE does not provide Ultimate's native Dependency Scanning. The ecosystem
 audit and OWASP jobs above are the explicit CE alternatives. Reports remain
 available as CI artifacts; Ultimate vulnerability dashboards are not assumed.
@@ -302,6 +310,8 @@ Run from your checkout of this repository, choosing **one** profile:
 python3 samples-gitlab-ci/security/prepare-example.py django /tmp/django-ci-overlay
 # Or, for an Angular application:
 python3 samples-gitlab-ci/security/prepare-example.py angular /tmp/angular-ci-overlay
+# Or, for an Angular frontend and Java/Maven backend:
+python3 samples-gitlab-ci/security/prepare-example.py angular-java /tmp/angular-java-ci-overlay
 ```
 
 The destination must be new. The tool copies only the selected CI template and
@@ -323,6 +333,9 @@ Keep your own dependency manifests, lock files, source and tests. The Django
 `requirements.txt.example` is an optional starting point for a new application;
 it must not replace an existing project's requirements.txt. Commit the integrated
 files in the **application's GitLab repository** after completing the setup below.
+
+For Angular + Java, place the overlay at the monorepo root, alongside frontend/
+and backend/. Its two Dockerfiles are under ci/; there is no root Dockerfile.
 
 ### Adapt the Django example
 
@@ -403,6 +416,97 @@ collectstatic or deploy the application automatically.
    [Angular's compatibility table](https://angular.dev/reference/versions) before
    changing the image. Application dependencies are never upgraded by this CI.
 
+### Adapt the Angular + Java example
+
+This profile targets an npm-managed Angular SPA and a Java backend packaged as an
+**executable Maven JAR**, including Spring Boot. It contains no application source
+or business-specific configuration. A typical consuming repository is:
+
+```text
+.gitlab-ci.yml
+sonar-project.properties
+ci/                          # generic helpers and two Dockerfiles
+frontend/
+  package.json               # your test:ci and build:ci scripts
+  package-lock.json
+  angular.json
+  src/
+backend/
+  pom.xml                    # executable JAR, tests and JaCoCo report
+  src/main/
+  src/test/
+```
+
+1. Merge the overlay into your repository. Keep the application's existing npm
+   lock file and Maven POM. The CI does not upgrade application dependencies.
+   Define the frontend scripts as described for Angular above. For an existing
+   @angular/build:karma builder, the optional ci/karma.conf.cjs resolves Jasmine, Chrome and
+   coverage plugins from your frontend dependencies. A compatible script is
+   `ng test --watch=false --code-coverage --browsers=ChromeHeadlessCI --karma-config=../ci/karma.conf.cjs`.
+   It runs your existing test suites; change the relative path if moving frontend/.
+2. Configure these non-secret variables in the YAML or protected GitLab variables:
+
+   | Variable | Default | Adaptation |
+   | --- | --- | --- |
+   | `FRONTEND_DIR` | `frontend` | npm workspace directory, relative to repository root |
+   | `BACKEND_DIR` | `backend` | Directory containing the Maven POM |
+   | `ANGULAR_DIST_DIR` | `frontend/dist/app/browser` | Built directory containing index.html, relative to repository root |
+   | `FRONTEND_LCOV` | `frontend/coverage/lcov.info` | Frontend coverage report, relative to repository root |
+   | `BACKEND_JAR_GLOB` | `backend/target/*.jar` | Must select exactly one executable JAR |
+   | `JAVA_SOURCE` | `17` | Java source release reported to SonarQube; keep consistent with both Java images |
+   | `ANGULAR_SMOKE_PATH` | `/` | Frontend route returning the SPA index |
+   | `BACKEND_PORT` | `8080` | Actual backend HTTP port inside its container |
+   | `BACKEND_SMOKE_PATH` | `/actuator/health` | Existing endpoint returning HTTP 200 |
+
+   Set a real endpoint: the example does not add Actuator to your dependencies.
+   A missing/failing endpoint fails the build. The frontend and backend smoke
+   checks verify each runtime image; they do not replace an application-specific
+   end-to-end browser test.
+3. The backend job runs `mvn verify dependency:copy-dependencies -DincludeScope=test`.
+   Keep real tests enabled and configure JaCoCo in your POM to generate
+   `target/site/jacoco/jacoco.xml`. The job exports Surefire JUnit reports and
+   resolves test dependencies too, so OWASP and CycloneDX cover the build/test
+   dependency set. Sonar receives classes, test classes, dependencies, JaCoCo and
+   frontend LCOV. Adjust the sonar-scanner arguments and artifact paths for a
+   different source tree, coverage location or multi-module Maven reactor.
+4. Maven uses JDK 17 and the backend image uses a Java 17 JRE. If your application
+   needs a different release, update JAVA_SOURCE, the backend_tests image and
+   ci/backend.Dockerfile together. Configure your normal executable/fat JAR packaging;
+   ci/normalize-jar.py refuses ambiguous selections and JARs without Main-Class.
+   For a multi-module build, select the deployable module's JAR explicitly and
+   scan all resolved module dependencies. Gradle and WAR/application-server
+   deployments require adapting the build, dependency/SBOM jobs and Dockerfile.
+5. The frontend image serves the tested bundle with Nginx on 8080. The backend
+   image contains the exact tested JAR and runs as UID/GID 10001. Neither image
+   includes CI credentials or runtime env files. Configure the frontend's API
+   base URL and production routing using your application's normal mechanism;
+   the example Nginx configuration provides SPA fallback only.
+6. Supply runtime configuration for the backend smoke test using a protected
+   **File** variable `BACKEND_SMOKE_ENV_FILE` containing Docker env-file entries.
+   For temporary dependencies such as PostgreSQL, optionally set
+   `SMOKE_SETUP_SCRIPT=./ci/smoke-setup.sh` and
+   `SMOKE_CLEANUP_SCRIPT=./ci/smoke-cleanup.sh` to your own committed scripts.
+   These hooks are sourced as trusted project code inside the isolated Docker
+   job. The setup hook can create a temporary service/network, set
+   `SMOKE_NETWORK`, and generate BACKEND_SMOKE_ENV_FILE at runtime. The cleanup
+   hook must tolerate partial setup, remove only resources it created and delete
+   temporary credentials. Use synthetic test data and never echo secrets.
+   Unit/integration tests needing services must configure them separately in
+   backend_tests; the image smoke hooks run later, in build_container.
+
+The two Dependency-Check jobs generate separate JSON/XML/HTML reports under
+reports/frontend/ and reports/backend/. Their inventories must cover the npm and
+Maven PURLs from the corresponding application SBOMs. Missing scans or incomplete
+dependency resolution block publication. The optional Karma adapter is unrelated
+to the Java build and can be replaced by your existing frontend test configuration.
+The backend uses the official
+[OWASP Maven plugin](https://dependency-check.github.io/DependencyCheck/dependency-check-maven/check-mojo.html)
+with test-scope scanning enabled. It obtains exact group/artifact/version identities
+from Maven's resolved graph, avoiding incomplete identification from JAR filenames
+or external SHA-1 search. As in the plugin defaults, the separate Maven Central
+enrichment analyzer is unused because this metadata is already available from
+the build. The frontend continues to use the official OWASP CLI with Node Audit.
+
 ### Configure the Runner and external services
 
 Use a dedicated **project Runner**, tagged `ossf-security`, locked to the project,
@@ -427,8 +531,12 @@ concurrent = 1
 Register the Runner with its GitLab-issued authentication token through the normal
 Runner registration flow. Docker-in-Docker uses TLS on port 2376. Run trusted code
 on this privileged Runner and do not mount the host Docker socket. Provide enough
-RAM/disk for the services, scanner caches and image archives. Increase the project's
-maximum artifact size if the image exceeds GitLab's configured limit.
+RAM/disk for the services, scanner caches and image archives. In Settings > CI/CD >
+General pipelines, increase the project's maximum artifact size to fit the job's
+**combined artifact archive**. Angular + Java transfers both raw image archives
+and the JAR in one build job. GitLab's default 100 MB limit can cause HTTP 413
+even when each individual compressed image would fit; see
+[GitLab's artifact size settings](https://docs.gitlab.com/ci/jobs/job_artifacts/#set-the-maximum-artifacts-size).
 
 Create a private SonarQube project, a DefectDojo product and a Nexus raw hosted
 repository for the application. Give the Sonar CI identity Browse and Execute
@@ -465,7 +573,8 @@ The analysis job serializes access and verifies the analyzed commit and analysis
 Validate the integrated YAML in GitLab's Pipeline Editor/CI Lint, push to the
 protected default branch and open Build > Pipelines. Inspect each job's log and
 artifacts. A successful scanner job means it executed successfully, not that the
-application is free of findings. The barrier requires all eight reports and
+application is free of findings. The barrier requires all eight reports for
+Django/Angular, or twelve for Angular + Java, and
 completed synchronous DefectDojo imports in a distinct engagement per CI run.
 
 Publication is refused for any active finding at or above `DD_MIN_SEVERITY`, any
@@ -473,6 +582,7 @@ pip-audit/npm audit finding, any unknown severity, an incomplete/missing report,
 an API error or a Sonar quality gate other than `OK`. Unverified and duplicate
 findings count conservatively. Dependency-Check JSON/XML inventories must agree;
 for Angular, OWASP's npm inventory must also cover the application SBOM identities.
+Angular + Java checks this coverage independently for npm and Maven.
 OWASP uses the official NVD data feed with a cache; OSS Index enrichment is disabled
 because it requires separate credentials. Angular's Node Audit analyzer remains
 active and has access to the installed modules next to the lock file.
@@ -489,6 +599,15 @@ archive repository, rather than a Docker registry. Require approval.json, upload
 last, when consuming a release. Retry partial publications with a new pipeline ID
 because existing paths are immutable. Download image.tar and run `docker load -i
 image.tar` to load the approved image. Deploy it separately with runtime configuration.
+
+For Angular + Java, the same path contains `frontend-image.tar`,
+`backend-image.tar`, `application.jar`, `frontend-sbom.cdx.json`,
+`backend-sbom.cdx.json`, `frontend-container-sbom.cdx.json`,
+`backend-container-sbom.cdx.json` and `approval.json`. Load each image archive with
+`docker load -i <archive>`. Both images and all five accompanying artifacts must
+match the hashes in the approval. A refusal for either component blocks the
+complete release. A Nexus connectivity probe alone does not constitute an
+approved application publication.
 
 The outer Docker archive is not gzipped: GitLab's analyzer repeatedly reads archive
 metadata, and additional gzip decompression can make that path very slow. The same
@@ -507,10 +626,12 @@ These tests validate the shared policy and publisher contracts. Each consuming
 application must validate its own test command, dependencies, Docker image,
 service connectivity and complete pipeline before enabling releases.
 
-The generic templates passed the installed GitLab 19.4 compiler and the 22 shared
-policy tests. Both Dockerfiles also passed HTTP and non-root runtime smoke checks
-using disposable, generic fixtures. This does not replace a full pipeline run
-against the consuming application's code and external services.
+The shared policy has 28 tests covering the existing profiles, complete two-image
+approvals, missing backend scans, incomplete Maven inventories, unknown container
+severities and changed JARs. Validate the integrated template with your installed
+GitLab compiler and run the complete pipeline against your application before
+enabling releases. Test executions and application-specific reports belong in the
+consuming private repository, outside these generic examples.
 
 ## Validation
 

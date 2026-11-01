@@ -1,0 +1,374 @@
+# Generic Angular + Java/Maven security pipeline; see README.
+# The Maven OWASP plugin uses resolved GAV identities, including test dependencies.
+include:
+  - template: Jobs/Secret-Detection.gitlab-ci.yml
+  - template: Jobs/SAST.gitlab-ci.yml
+  - template: Jobs/Container-Scanning.gitlab-ci.yml
+stages:
+  - prepare
+  - test
+  - build
+  - scan
+  - quality
+  - publish
+workflow:
+  rules:
+    - if: $CI_COMMIT_REF_PROTECTED == "true" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+default:
+  image: node:22.23.2-bookworm-slim@sha256:48e4b67d85f87bd551df43704e24d252f56cc5f8e9718841aace50f19948f0f9
+  tags:
+    - ossf-security
+  interruptible: true
+  timeout: 30m
+variables:
+  OSSF_PROFILE: angular-java
+  CI: 'true'
+  ANGULAR_DIST_DIR: frontend/dist/app/browser
+  ANGULAR_SMOKE_PATH: /
+  CHROME_BIN: /usr/bin/chromium
+  GIT_DEPTH: '0'
+  DD_MIN_SEVERITY: High
+  NG_CLI_ANALYTICS: 'false'
+  npm_config_cache: $CI_PROJECT_DIR/.npm
+  SONAR_USER_HOME: $CI_PROJECT_DIR/.cache/sonar
+  NVD_DATAFEED: https://dependency-check.github.io/DependencyCheck_Builder/nvd_cache/nvdcve-{0}.json.gz
+  SAST_EXCLUDED_ANALYZERS: gitlab-advanced-sast,gitlab-advanced-sast-cpp,gitlab-advanced-sast-ext
+  FRONTEND_DIR: frontend
+  BACKEND_DIR: backend
+  FRONTEND_LCOV: frontend/coverage/lcov.info
+  BACKEND_JAR_GLOB: backend/target/*.jar
+  BACKEND_PORT: '8080'
+  BACKEND_SMOKE_PATH: /actuator/health
+  JAVA_SOURCE: '17'
+  MAVEN_OPTS: -Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository
+.api_job:
+  image: python:3.14.7-slim-trixie
+  before_script:
+    - pip install requests==2.34.2
+resolve_dependencies:
+  stage: prepare
+  script:
+    - cd "$FRONTEND_DIR"
+    - npm ci --no-audit --no-fund
+  cache:
+    key: npm-angular-$CI_RUNNER_EXECUTABLE_ARCH
+    paths:
+      - .npm/
+  artifacts:
+    access: developer
+    expire_in: 1 day
+    paths:
+      - $FRONTEND_DIR/node_modules/
+angular_tests:
+  stage: test
+  needs:
+    - resolve_dependencies
+  script:
+    - apt-get update && apt-get install -y --no-install-recommends chromium
+    - npm --prefix "$FRONTEND_DIR" run test:ci
+    - npm --prefix "$FRONTEND_DIR" run build:ci
+    - test -f "$ANGULAR_DIST_DIR/index.html"
+    - mkdir -p .ci-dist/frontend
+    - cp -R "$ANGULAR_DIST_DIR"/. .ci-dist/frontend/
+  artifacts:
+    access: developer
+    expire_in: 1 day
+    paths:
+      - .ci-dist/frontend/
+      - $FRONTEND_DIR/coverage/
+secret_detection:
+  dependencies: []
+  allow_failure: false
+  image:
+    name: $SECURE_ANALYZERS_PREFIX/secrets:7
+    docker:
+      platform: linux/amd64
+  variables:
+    SECRET_DETECTION_HISTORIC_SCAN: 'true'
+  artifacts:
+    when: always
+    paths:
+      - gl-secret-detection-report.json
+semgrep-sast:
+  dependencies: []
+  allow_failure: false
+  image:
+    name: $SECURE_ANALYZERS_PREFIX/semgrep:6
+    docker:
+      platform: linux/amd64
+  artifacts:
+    when: always
+    paths:
+      - gl-sast-report.json
+  rules:
+    - if: $CI_COMMIT_REF_PROTECTED == "true" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+npm_audit:
+  stage: test
+  needs:
+    - resolve_dependencies
+  dependencies: []
+  script:
+    - mkdir -p reports
+    - |
+      status=0
+      (cd "$FRONTEND_DIR" && npm audit --package-lock-only --json) > reports/npm-audit.json || status=$?
+      node ci/check-npm-audit.cjs "$status"
+  artifacts:
+    when: always
+    access: developer
+    paths:
+      - reports/npm-audit.json
+backend_tests:
+  stage: test
+  image: maven:3.9.16-eclipse-temurin-17@sha256:1a352420f7aba21f5ad08df31bab55f74c013fb491f1ae8ab1dd7ff9ed698584
+  needs: []
+  cache: &id001
+    key: maven-java17
+    paths:
+      - .m2/repository/
+  script:
+    - mvn -B -f "$BACKEND_DIR/pom.xml" verify dependency:copy-dependencies -DincludeScope=test
+    - mvn -B -f "$BACKEND_DIR/pom.xml" org.cyclonedx:cyclonedx-maven-plugin:2.9.3:makeAggregateBom -DschemaVersion=1.6
+      -DoutputFormat=json -DincludeTestScope=true -DoutputDirectory="$CI_PROJECT_DIR/reports" -DoutputName=backend-sbom.cdx
+      -Dcyclonedx.skipAttach=true
+    - apt-get update && apt-get install -y --no-install-recommends python3
+    - python3 ci/normalize-jar.py
+  artifacts:
+    when: always
+    access: developer
+    expire_in: 1 day
+    paths:
+      - .ci-dist/backend/
+      - $BACKEND_DIR/target/
+      - reports/backend-sbom.cdx.json
+    reports:
+      junit: $BACKEND_DIR/target/surefire-reports/TEST-*.xml
+      cyclonedx: reports/backend-sbom.cdx.json
+frontend_dependency_check:
+  stage: test
+  needs:
+    - resolve_dependencies
+  image:
+    name: owasp/dependency-check@sha256:0e8f69ad5b00d62000937f4e57189812343f6903d9c83ee712012d51542a020a
+    entrypoint:
+      - ''
+  timeout: 1h
+  resource_group: dependency-check-cache
+  variables:
+    JAVA_OPTS: -Xmx2g
+  cache:
+    key: dependency-check-2026-11
+    paths:
+      - .cache/dependency-check/
+  script:
+    - mkdir -p reports/frontend .cache/dependency-check .odc-input
+    - cp "$FRONTEND_DIR/package.json" "$FRONTEND_DIR/package-lock.json" .odc-input/
+    - ln -s "$CI_PROJECT_DIR/$FRONTEND_DIR/node_modules" .odc-input/node_modules
+    - /usr/share/dependency-check/bin/dependency-check.sh --project "$CI_PROJECT_PATH frontend" --scan .odc-input/package-lock.json
+      --data .cache/dependency-check --nvdDatafeed "$NVD_DATAFEED" --disableOssIndex --format JSON --format XML
+      --format HTML --out reports/frontend
+  artifacts:
+    when: always
+    access: developer
+    paths:
+      - reports/frontend/
+backend_dependency_check:
+  stage: test
+  needs:
+    - backend_tests
+  image: maven:3.9.16-eclipse-temurin-17@sha256:1a352420f7aba21f5ad08df31bab55f74c013fb491f1ae8ab1dd7ff9ed698584
+  timeout: 1h
+  resource_group: dependency-check-cache
+  variables:
+    MAVEN_OPTS: -Xmx2g -Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository
+  cache:
+    - *id001
+    - key: dependency-check-maven-2026-11
+      paths:
+        - .cache/dependency-check/
+  script:
+    - mkdir -p reports/backend .cache/dependency-check
+    - mvn -B -f "$BACKEND_DIR/pom.xml" org.owasp:dependency-check-maven:13.0.0:check -DskipTestScope=false -DfailOnError=true
+      -DdataDirectory="$CI_PROJECT_DIR/.cache/dependency-check" -DnvdDatafeedUrl="$NVD_DATAFEED" -DossIndexAnalyzerEnabled=false
+      -Dformats=JSON,XML,HTML -Dodc.outputDirectory="$CI_PROJECT_DIR/reports/backend"
+  artifacts:
+    when: always
+    access: developer
+    paths:
+      - reports/backend/
+npm_sbom:
+  stage: test
+  needs:
+    - resolve_dependencies
+  script:
+    - mkdir -p reports
+    - npm install --prefix /tmp/sbom-tools --ignore-scripts --no-audit --no-fund @cyclonedx/cyclonedx-npm@6.0.1
+    - cd "$FRONTEND_DIR"
+    - /tmp/sbom-tools/node_modules/.bin/cyclonedx-npm --spec-version 1.6 --output-format JSON --output-reproducible
+      --output-file "$CI_PROJECT_DIR/reports/frontend-sbom.cdx.json"
+  artifacts:
+    access: developer
+    paths:
+      - reports/frontend-sbom.cdx.json
+    reports:
+      cyclonedx: reports/frontend-sbom.cdx.json
+sonarqube:
+  stage: test
+  needs:
+    - angular_tests
+    - backend_tests
+  resource_group: sonarqube-analysis
+  image:
+    name: sonarsource/sonar-scanner-cli@sha256:47956b669bf486bdad919e1cbd0533223515aa0b6d1d31763e5a3754942df6d7
+    entrypoint:
+      - ''
+    docker:
+      platform: linux/amd64
+  script:
+    - mkdir -p reports
+    - sonar-scanner -Dsonar.projectKey="$SONAR_PROJECT_KEY" -Dsonar.scm.revision="$CI_COMMIT_SHA" -Dsonar.scanner.metadataFilePath="$CI_PROJECT_DIR/reports/sonar-task.txt"
+      -Dsonar.sources="$FRONTEND_DIR/src,$BACKEND_DIR/src/main" -Dsonar.tests="$FRONTEND_DIR/src,$BACKEND_DIR/src/test"
+      -Dsonar.typescript.tsconfigPaths="$FRONTEND_DIR/tsconfig.app.json" -Dsonar.javascript.lcov.reportPaths="$FRONTEND_LCOV"
+      -Dsonar.java.binaries="$BACKEND_DIR/target/classes" -Dsonar.java.test.binaries="$BACKEND_DIR/target/test-classes"
+      -Dsonar.java.libraries="$BACKEND_DIR/target/dependency/*.jar" -Dsonar.coverage.jacoco.xmlReportPaths="$BACKEND_DIR/target/site/jacoco/jacoco.xml"
+      -Dsonar.java.test.libraries="$BACKEND_DIR/target/dependency/*.jar" -Dsonar.java.source="$JAVA_SOURCE"
+    - python3 -m pip install --target .sonar-tools requests==2.34.2
+    - PYTHONPATH="$CI_PROJECT_DIR/.sonar-tools" python3 ci/pipeline.py sonar-export
+  artifacts:
+    when: always
+    access: developer
+    paths:
+      - reports/sonar-task.txt
+      - reports/sonarqube.json
+      - reports/sonar-quality-gate.json
+build_container:
+  stage: build
+  needs:
+    - angular_tests
+    - backend_tests
+  image: docker:29.8.1-cli
+  services:
+    - name: docker:29.8.1-dind
+      alias: docker
+  variables:
+    DOCKER_HOST: tcp://docker:2376
+    DOCKER_TLS_CERTDIR: /certs
+    DOCKER_TLS_VERIFY: '1'
+    DOCKER_CERT_PATH: /certs/client
+  script:
+    - export FRONTEND_IMAGE="$CI_PROJECT_PATH_SLUG-frontend:$CI_COMMIT_SHA"
+    - export BACKEND_IMAGE="$CI_PROJECT_PATH_SLUG-backend:$CI_COMMIT_SHA"
+    - docker build --pull --label "org.opencontainers.image.revision=$CI_COMMIT_SHA" -f ci/frontend.Dockerfile -t
+      "$FRONTEND_IMAGE" .
+    - docker build --pull --label "org.opencontainers.image.revision=$CI_COMMIT_SHA" -f ci/backend.Dockerfile -t
+      "$BACKEND_IMAGE" .
+    - sh ci/smoke-images.sh
+    - mkdir -p dist
+    - docker save --output dist/frontend-image.tar "$FRONTEND_IMAGE"
+    - docker save --output dist/backend-image.tar "$BACKEND_IMAGE"
+    - chmod 644 dist/*.tar
+  artifacts:
+    access: developer
+    expire_in: 1 day
+    paths:
+      - dist/
+      - .ci-dist/backend/application.jar
+container_scanning:
+  stage: scan
+  allow_failure: false
+  needs:
+    - build_container
+  dependencies:
+    - build_container
+  image:
+    name: $CS_ANALYZER_IMAGE
+    docker:
+      platform: linux/amd64
+  variables:
+    CS_IMAGE: archive://dist/image.tar
+    CS_INCLUDE_LICENSES: 'true'
+  artifacts:
+    when: always
+    paths:
+      - gl-container-scanning-report.json
+      - gl-sbom-report.cdx.json
+  rules:
+    - when: never
+defectdojo_quality_barrier:
+  extends: .api_job
+  stage: quality
+  needs:
+    - secret_detection
+    - semgrep-sast
+    - npm_audit
+    - frontend_dependency_check
+    - backend_dependency_check
+    - npm_sbom
+    - backend_tests
+    - sonarqube
+    - build_container
+    - frontend_container_scanning
+    - backend_container_scanning
+  script:
+    - python ci/pipeline.py gate
+  artifacts:
+    when: always
+    access: developer
+    paths:
+      - reports/gate-summary.json
+      - reports/approval.json
+publish_nexus:
+  extends: .api_job
+  stage: publish
+  interruptible: false
+  needs:
+    - defectdojo_quality_barrier
+    - build_container
+    - npm_sbom
+    - backend_tests
+    - frontend_container_scanning
+    - backend_container_scanning
+  script:
+    - python ci/pipeline.py publish
+frontend_container_scanning:
+  extends: container_scanning
+  rules:
+    - if: $CI_COMMIT_REF_PROTECTED == "true" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  variables:
+    CS_IMAGE: archive://dist/frontend-image.tar
+  script:
+    - gtcs scan
+    - mv gl-container-scanning-report.json reports/frontend-container.json
+    - mv gl-sbom-report.cdx.json reports/frontend-container-sbom.cdx.json
+  before_script:
+    - mkdir -p reports
+  artifacts:
+    when: always
+    paths:
+      - reports/frontend-container.json
+      - reports/frontend-container-sbom.cdx.json
+    reports:
+      container_scanning: reports/frontend-container.json
+      cyclonedx:
+        - reports/frontend-container-sbom.cdx.json
+backend_container_scanning:
+  extends: container_scanning
+  rules:
+    - if: $CI_COMMIT_REF_PROTECTED == "true" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  variables:
+    CS_IMAGE: archive://dist/backend-image.tar
+  script:
+    - gtcs scan
+    - mv gl-container-scanning-report.json reports/backend-container.json
+    - mv gl-sbom-report.cdx.json reports/backend-container-sbom.cdx.json
+  before_script:
+    - mkdir -p reports
+  artifacts:
+    when: always
+    paths:
+      - reports/backend-container.json
+      - reports/backend-container-sbom.cdx.json
+    reports:
+      container_scanning: reports/backend-container.json
+      cyclonedx:
+        - reports/backend-container-sbom.cdx.json

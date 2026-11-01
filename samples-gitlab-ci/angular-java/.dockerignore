@@ -1,0 +1,7 @@
+**
+!ci/
+!ci/frontend.Dockerfile
+!ci/backend.Dockerfile
+!ci/nginx.conf
+!.ci-dist/
+!.ci-dist/**

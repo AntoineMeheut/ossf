@@ -1,0 +1,41 @@
+Use case: infographic-diagram / edit of Image 1.
+Asset type: public GitHub README software-factory architecture diagram.
+Edit the supplied ossf.png to reflect the current GENERIC Django and Angular CI examples and give the image a fully opaque solid BLACK (#000000) background. Retain the recognizable source-code -> GitLab repository -> GitLab Runner CI -> quality barrier -> Nexus architecture, green workflow elements and white connectors/type. Reflow and simplify the old drawing for readability. Wide landscape, high-resolution, crisp flat technical diagram; large legible English labels, generous spacing, no cropped labels. Avoid extra slogans, decorative backgrounds or tiny text.
+
+Use the following exact content and logical relationships. This is a conceptual workflow, with source checks grouped together (not falsely presented as serial jobs):
+TITLE: "Open Source Software Factory"
+SUBTITLE: "Generic Django & Angular CI · GitLab CE"
+
+A small input area with developers and a repository labelled "Application source" and "GitLab CE".
+A clear main workflow inside a boundary labelled "GitLab Runner · Docker executor", arranged in two rows if needed:
+1. "Resolve & test"
+   "Django: pip · project tests"
+   "Angular: npm ci · test:ci · build:ci"
+2. A grouped area "Source checks" containing FOUR separate visible blocks:
+   "GitLab Secret Detection"
+   "Dependency audit" with "pip-audit / npm audit" and "OWASP Dependency-Check"
+   "Code quality" with "SonarQube"
+   "GitLab SAST" with "Semgrep"
+3. "Build & smoke test"
+   "Docker image"
+   "Django: Gunicorn · Angular: Nginx"
+4. "Image scan & SBOM" with two clear sub-blocks:
+   "GitLab Container Scanning"
+   "CycloneDX · application + container"
+5. "Quality barrier" with "DefectDojo" and "8 reports · Sonar gate · release policy"
+   Show a small RED downward branch labelled "Blocked: no publication".
+   The only connector continuing toward Nexus must be labelled "Approved".
+6. A repository/storage cylinder on the right labelled "Nexus" and "Raw artifact repository".
+   Under it, label "image.tar · 2 SBOMs · approval.json".
+   A small secondary line: "SHA-256 verification".
+
+Keep source checks easy to scan; every named tool above must remain visible. Do not claim GitLab CE has native Ultimate Dependency Scanning. Add a short readable note: "GitLab CE dependency scanning alternatives: pip-audit / npm audit + OWASP".
+Keep all labels concise exactly as supplied; no claims that vulnerabilities are automatically fixed, no deployment stage, no cloud services.
+
+At the bottom, a concise three-card infrastructure legend:
+"VM 1" / "GitLab CE · Runner · Docker · DefectDojo"
+"VM 2" / "SonarQube · PostgreSQL"
+"VM 3" / "Nexus"
+There are exactly THREE VMs, not four.
+
+Constraints: no private project names, no usernames, no IP addresses, no file-system paths, no test results, no unrelated programming-language profiles. English labels, correct capitalization for GitLab, SonarQube, DefectDojo, CycloneDX, Nexus. Solid opaque pure black outer canvas; white text and arrows; green workflow elements, with red only on blocked branch.

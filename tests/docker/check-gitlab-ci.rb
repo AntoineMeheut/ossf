@@ -2,7 +2,7 @@
 # Validate the CI configuration without running jobs or publishing packages/images.
 # Run with gitlab-rails runner in the disposable GitLab test instance.
 root = ARGV.fetch(0)
-# Include the nested .gitlab-ci.yml examples as well as the original Audit files.
+# Include all six nested .gitlab-ci.yml profiles, including hidden filenames.
 files = Dir.glob(File.join(root, '**', '*.yml'), File::FNM_DOTMATCH).select { |path| File.file?(path) }
 abort 'No CI examples found' if files.empty?
 # Examine every example and fail overall if at least one file is invalid.

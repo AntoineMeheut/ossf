@@ -1,4 +1,5 @@
 #!/bin/bash
+# Contract and recovery: docs/INSTALLATION.md, docs/CONFIGURATION.md, docs/OPERATIONS.md.
 # VM 1: Docker for DefectDojo and Runner jobs using the Docker executor.
 # Configuration: DOCKER_VERSION, COMPOSE_VERSION and WAIT_TIMEOUT in config/ossf.env.
 # Install Docker Engine and Compose from the official stable APT repository.

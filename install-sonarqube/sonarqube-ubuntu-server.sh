@@ -1,4 +1,5 @@
 #!/bin/bash
+# Contract and recovery: docs/INSTALLATION.md, docs/CONFIGURATION.md, docs/OPERATIONS.md.
 # VM 2: native SonarQube and local PostgreSQL; settings SONARQUBE_* and WAIT_TIMEOUT.
 # The database listens on localhost:5432 on this VM, independently of DefectDojo (VM 1).
 # Install SonarQube Community Build with Ubuntu's PostgreSQL 18 and JDK 25.

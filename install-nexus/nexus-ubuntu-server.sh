@@ -1,4 +1,5 @@
 #!/bin/bash
+# Contract and recovery: docs/INSTALLATION.md, docs/CONFIGURATION.md, docs/OPERATIONS.md.
 # VM 3: native Nexus; settings NEXUS_* and WAIT_TIMEOUT in config/ossf.env.
 # Use the Java runtime supplied by Sonatype, independently of the SonarQube VM's JDK.
 # Install Nexus Repository 3.96 on Ubuntu 26.04 (amd64 or arm64).

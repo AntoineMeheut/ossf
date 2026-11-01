@@ -1,0 +1,259 @@
+# OSSF integration guide: docs/CI.md; assemble with security/prepare-example.py.
+# Generic python pipeline. Assemble with security/prepare-example.py; see README.
+include:
+  - template: Jobs/Secret-Detection.gitlab-ci.yml
+  - template: Jobs/SAST.gitlab-ci.yml
+  - template: Jobs/Container-Scanning.gitlab-ci.yml
+stages:
+  - prepare
+  - test
+  - build
+  - scan
+  - quality
+  - publish
+workflow:
+  rules:
+    - if: $CI_COMMIT_REF_PROTECTED == "true" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+default:
+  image: python:3.14.7-slim-trixie
+  tags:
+    - ossf-security
+  interruptible: true
+  timeout: 30m
+variables:
+  OSSF_PROFILE: python
+  PIP_CACHE_DIR: $CI_PROJECT_DIR/.cache/pip
+  GIT_DEPTH: '0'
+  DD_MIN_SEVERITY: High
+  SONAR_USER_HOME: $CI_PROJECT_DIR/.cache/sonar
+  NVD_DATAFEED: https://dependency-check.github.io/DependencyCheck_Builder/nvd_cache/nvdcve-{0}.json.gz
+  SAST_EXCLUDED_ANALYZERS: gitlab-advanced-sast,gitlab-advanced-sast-cpp,gitlab-advanced-sast-ext
+  PYTHON_MODULE: app
+  PYTHON_SOURCE_DIR: src
+  SMOKE_SCRIPT: ci/smoke-image.sh
+.python_job:
+  needs:
+    - resolve_dependencies
+  before_script:
+    - python -m venv .venv
+    - .venv/bin/pip install --no-index --find-links wheelhouse -r requirements.txt -r ci/requirements.txt
+    - python -m venv .tools
+    - .tools/bin/pip install --no-index --find-links wheelhouse -r ci/requirements.txt
+  cache:
+    key: pip-$CI_RUNNER_EXECUTABLE_ARCH
+    paths:
+      - .cache/pip/
+.api_job:
+  before_script:
+    - pip install requests==2.34.2
+resolve_dependencies:
+  stage: prepare
+  script:
+    - 'pip download --only-binary=:all: --dest wheelhouse -r requirements.txt -r ci/requirements.txt'
+  artifacts:
+    access: developer
+    expire_in: 1 day
+    paths:
+      - wheelhouse/
+secret_detection:
+  dependencies: []
+  allow_failure: false
+  image:
+    name: $SECURE_ANALYZERS_PREFIX/secrets:7
+    docker:
+      platform: linux/amd64
+  variables:
+    SECRET_DETECTION_HISTORIC_SCAN: 'true'
+  artifacts:
+    when: always
+    paths:
+      - gl-secret-detection-report.json
+semgrep-sast:
+  dependencies: []
+  allow_failure: false
+  image:
+    name: $SECURE_ANALYZERS_PREFIX/semgrep:6
+    docker:
+      platform: linux/amd64
+  artifacts:
+    when: always
+    paths:
+      - gl-sast-report.json
+  rules:
+    - if: $CI_COMMIT_REF_PROTECTED == "true" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+pip_audit:
+  extends: .python_job
+  stage: test
+  script:
+    - mkdir -p reports
+    - .tools/bin/python ci/pipeline.py audit
+  artifacts:
+    when: always
+    access: developer
+    paths:
+      - reports/pip-audit.json
+owasp_dependency_check:
+  stage: test
+  needs:
+    - resolve_dependencies
+  image:
+    name: owasp/dependency-check@sha256:0e8f69ad5b00d62000937f4e57189812343f6903d9c83ee712012d51542a020a
+    entrypoint:
+      - ''
+  timeout: 1h
+  resource_group: dependency-check-cache
+  variables:
+    JAVA_OPTS: -Xmx2g
+  cache:
+    key: dependency-check-2026-11
+    paths:
+      - .cache/dependency-check/
+  script:
+    - mkdir -p reports .cache/dependency-check
+    - /usr/share/dependency-check/bin/dependency-check.sh --project "$CI_PROJECT_PATH" --scan wheelhouse --enableExperimental
+      --data .cache/dependency-check --nvdDatafeed "$NVD_DATAFEED" --disableOssIndex --format JSON --format XML
+      --format HTML --out reports
+  artifacts:
+    when: always
+    access: developer
+    paths:
+      - reports/dependency-check-report.json
+      - reports/dependency-check-report.xml
+      - reports/dependency-check-report.html
+python_sbom:
+  extends: .python_job
+  stage: test
+  script:
+    - mkdir -p reports
+    - .tools/bin/cyclonedx-py environment .venv/bin/python --output-format JSON --spec-version 1.6 --output-file
+      reports/application-sbom.cdx.json
+  artifacts:
+    access: developer
+    paths:
+      - reports/application-sbom.cdx.json
+    reports:
+      cyclonedx: reports/application-sbom.cdx.json
+sonarqube:
+  stage: test
+  needs:
+    - application_tests
+  resource_group: sonarqube-analysis
+  image:
+    name: sonarsource/sonar-scanner-cli@sha256:47956b669bf486bdad919e1cbd0533223515aa0b6d1d31763e5a3754942df6d7
+    entrypoint:
+      - ''
+    docker:
+      platform: linux/amd64
+  script:
+    - mkdir -p reports
+    - sonar-scanner -Dsonar.projectKey="$SONAR_PROJECT_KEY" -Dsonar.scm.revision="$CI_COMMIT_SHA" -Dsonar.scanner.metadataFilePath="$CI_PROJECT_DIR/reports/sonar-task.txt"
+      -Dsonar.sources="$PYTHON_SOURCE_DIR" -Dsonar.tests=tests
+    - python3 -m pip install --target .sonar-tools requests==2.34.2
+    - PYTHONPATH="$CI_PROJECT_DIR/.sonar-tools" python3 ci/pipeline.py sonar-export
+  artifacts:
+    when: always
+    access: developer
+    paths:
+      - reports/sonar-task.txt
+      - reports/sonarqube.json
+      - reports/sonar-quality-gate.json
+build_container:
+  stage: build
+  image: docker:29.8.1-cli
+  services:
+    - name: docker:29.8.1-dind
+      alias: docker
+  variables:
+    DOCKER_HOST: tcp://docker:2376
+    DOCKER_TLS_CERTDIR: /certs
+    DOCKER_TLS_VERIFY: '1'
+    DOCKER_CERT_PATH: /certs/client
+  script:
+    - export APP_IMAGE="$CI_PROJECT_PATH_SLUG:$CI_COMMIT_SHA"
+    - docker build --pull --build-arg PYTHON_MODULE="$PYTHON_MODULE" --label "org.opencontainers.image.revision=$CI_COMMIT_SHA"
+      -t "$APP_IMAGE" .
+    - sh "$SMOKE_SCRIPT"
+    - mkdir -p dist
+    - docker save --output dist/image.tar "$APP_IMAGE"
+    - chmod 644 dist/image.tar
+  artifacts:
+    access: developer
+    expire_in: 1 day
+    paths:
+      - dist/image.tar
+      - dist/python-package.tar.gz
+  needs:
+    - application_tests
+    - resolve_dependencies
+container_scanning:
+  stage: scan
+  allow_failure: false
+  needs:
+    - build_container
+  dependencies:
+    - build_container
+  image:
+    name: $CS_ANALYZER_IMAGE
+    docker:
+      platform: linux/amd64
+  variables:
+    CS_IMAGE: archive://dist/image.tar
+    CS_INCLUDE_LICENSES: 'true'
+  artifacts:
+    when: always
+    paths:
+      - gl-container-scanning-report.json
+      - gl-sbom-report.cdx.json
+defectdojo_quality_barrier:
+  extends: .api_job
+  stage: quality
+  needs:
+    - secret_detection
+    - semgrep-sast
+    - pip_audit
+    - owasp_dependency_check
+    - python_sbom
+    - sonarqube
+    - build_container
+    - container_scanning
+  script:
+    - python ci/pipeline.py gate
+  artifacts:
+    when: always
+    access: developer
+    paths:
+      - reports/gate-summary.json
+      - reports/approval.json
+publish_nexus:
+  extends: .api_job
+  stage: publish
+  interruptible: false
+  needs:
+    - defectdojo_quality_barrier
+    - build_container
+    - python_sbom
+    - container_scanning
+  script:
+    - python ci/pipeline.py publish
+application_tests:
+  extends: .python_job
+  stage: test
+  script:
+    - .venv/bin/python -m build --wheel --no-isolation --outdir dist/wheels
+    - .venv/bin/pip install --no-deps --no-build-isolation -e .
+    - .venv/bin/coverage run --source="$PYTHON_SOURCE_DIR" -m pytest tests --junitxml=reports/junit.xml
+    - .venv/bin/coverage xml -o coverage.xml
+    - python ci/package.py python
+  artifacts:
+    when: always
+    access: developer
+    paths:
+      - coverage.xml
+      - reports/junit.xml
+      - .ci-dist/wheels/
+      - dist/python-package.tar.gz
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+      junit: reports/junit.xml

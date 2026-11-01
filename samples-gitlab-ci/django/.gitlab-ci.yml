@@ -1,3 +1,4 @@
+# OSSF integration guide: docs/CI.md; assemble with security/prepare-example.py.
 # Assemble this overlay with security/prepare-example.py (shared ci/pipeline.py is required).
 # GitLab CE profile: pip-audit + OWASP Dependency-Check replace Ultimate-only DS.
 include:

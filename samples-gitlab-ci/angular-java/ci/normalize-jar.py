@@ -1,4 +1,9 @@
-"""Select exactly one executable Maven artifact; never guess between JARs."""
+"""Stage one executable Maven JAR without guessing between build artifacts.
+
+Run after backend tests from the repository root with BACKEND_JAR_GLOB set.
+The output is .ci-dist/backend/application.jar, shared by the image and approval.
+Main-Class validation does not replace the runtime HTTP smoke check.
+"""
 import glob
 import os
 from pathlib import Path

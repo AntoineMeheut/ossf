@@ -1,4 +1,5 @@
 #!/bin/bash
+# Contract and recovery: docs/INSTALLATION.md, docs/CONFIGURATION.md, docs/OPERATIONS.md.
 # VM 1: DefectDojo Docker stack; settings DEFECTDOJO_VERSION, INSTALL_DIR, DD_*, WAIT_TIMEOUT.
 # Install Docker/Compose first. PostgreSQL and Valkey remain inside this stack.
 # Install a pinned DefectDojo release using its upstream Compose configuration.

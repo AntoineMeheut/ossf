@@ -1,0 +1,8 @@
+**
+!Dockerfile
+!ci/
+!ci/entrypoint.sh
+!.ci-dist/
+!.ci-dist/**
+!dist/
+!dist/application.jar

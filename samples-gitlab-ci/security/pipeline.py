@@ -1,4 +1,14 @@
-"""CI integrations. Missing reports, incomplete imports and API errors fail closed."""
+"""Shared CI transport, report validation and conditional release publication.
+
+Run from the consuming repository root as ``python ci/pipeline.py COMMAND``.
+The YAML supplies OSSF_PROFILE, service credentials and GitLab's CI_* context.
+Report paths are relative to that root; importing this module makes no API calls.
+
+Commands: audit, sonar-export, require-c-analyzer, validate-dependency-check,
+gate and publish. Only gate/publish mutate remote application state. See
+samples-gitlab-ci/security/README.md and docs/DEVELOPMENT.md in the OSSF repository
+for inputs, outputs, refusal rules and the intentionally limited empty inventories.
+"""
 import hashlib
 import json
 import os
@@ -27,6 +37,13 @@ SEVERITIES = ("Critical", "High", "Medium", "Low", "Info")
 
 
 def reports():
+    """Return the required (path, Dojo parser, payload key) tuples for OSSF_PROFILE."""
+    profile = os.environ.get("OSSF_PROFILE", "django")
+    if profile == "java":
+        return tuple(item for item in REPORTS if item[0] != "reports/pip-audit.json")
+    if profile == "c":
+        return (REPORTS[0], ("reports/cppcheck.xml", "Cppcheck Scan", "errors"),
+                ("reports/grype.json", "Anchore Grype", "matches"), *REPORTS[4:])
     if os.environ.get("OSSF_PROFILE") == "angular-java":
         return (
             *REPORTS[:2],
@@ -40,12 +57,17 @@ def reports():
     if os.environ.get("OSSF_PROFILE") == "angular":
         return tuple(("reports/npm-audit.json", "NPM Audit v7+ Scan", "vulnerabilities")
                      if item[0] == "reports/pip-audit.json" else item for item in REPORTS)
-    if os.environ.get("OSSF_PROFILE", "django") != "django":
-        raise ValueError("OSSF_PROFILE must be django, angular or angular-java")
+    if profile not in ("django", "python"):
+        raise ValueError("Unknown OSSF_PROFILE")
     return REPORTS
 
 
 def assets():
+    """Return the complete artifact set bound to approval for the active profile."""
+    profile = os.environ.get("OSSF_PROFILE")
+    if profile in ("python", "java", "c"):
+        package = {"python": "python-package.tar.gz", "java": "application.jar", "c": "c-package.tar.gz"}[profile]
+        return ("dist/image.tar", f"dist/{package}", "reports/application-sbom.cdx.json", "gl-sbom-report.cdx.json")
     if os.environ.get("OSSF_PROFILE") == "angular-java":
         return ("dist/frontend-image.tar", "dist/backend-image.tar", ".ci-dist/backend/application.jar",
                 "reports/frontend-sbom.cdx.json", "reports/backend-sbom.cdx.json",
@@ -79,6 +101,11 @@ def digest(path):
 
 
 class API:
+    """Origin-restricted HTTP client for Sonar, Dojo and Nexus.
+
+    Requests never follow redirects or inherit proxy configuration. Errors expose
+    method/path/status rather than response bodies or authentication values.
+    """
     def __init__(self, base, token=None, auth=None, scheme="Bearer"):
         parsed = urlparse(base)
         if parsed.scheme not in ("http", "https") or not parsed.hostname or parsed.username or parsed.password:
@@ -107,10 +134,25 @@ class API:
 
 
 def validate_reports():
+    """Validate all local reports before any Dojo write and return their SHA-256 map.
+
+    Includes sidecar evidence such as OWASP JSON, the Conan graph and Grype
+    inventory. A parser error or incomplete scan raises instead of approving.
+    """
     for filename, _, key in reports():
+        if filename == "reports/cppcheck.xml":
+            root = ElementTree.parse(filename).getroot()
+            errors = root.find("errors")
+            if root.tag != "results" or errors is None or root.find("cppcheck") is None:
+                raise ValueError("Invalid Cppcheck report")
+            if any(e.get("id") in ("internalError", "syntaxError", "cppcheckError") for e in errors):
+                raise ValueError("Cppcheck could not analyze the complete source")
+            continue
         if filename.endswith("dependency-check-report.xml"):
             data = read_json(Path(filename).with_suffix(".json"))
             validate_dependency_check(data)
+            if os.environ.get("OSSF_PROFILE") == "java":
+                validate_dependency_inventory(data, ecosystem="maven")
             if os.environ.get("OSSF_PROFILE") == "angular":
                 validate_dependency_inventory(data)
             if os.environ.get("OSSF_PROFILE") == "angular-java":
@@ -123,6 +165,9 @@ def validate_reports():
                 raise ValueError("Dependency-Check XML and JSON inventories do not match")
             continue
         data = read_json(filename)
+        if filename == "reports/grype.json":
+            validate_grype(data)
+            continue
         if filename == "reports/npm-audit.json":
             validate_npm_audit(data)
             continue
@@ -131,7 +176,9 @@ def validate_reports():
             raise ValueError(f"Missing/invalid report payload: {filename} ({key})")
         if key == "vulnerabilities" and data.get("scan", {}).get("status") != "success":
             raise ValueError(f"Scanner did not complete successfully: {filename}")
-        if "sbom" in filename and (data.get("bomFormat") != "CycloneDX" or not data[key]):
+        empty_app = filename == "reports/application-sbom.cdx.json" and (
+            (os.environ.get("OSSF_PROFILE") == "c" and c_dependencies() == set()) or empty_java_inventory())
+        if "sbom" in filename and (data.get("bomFormat") != "CycloneDX" or (not data[key] and not empty_app)):
             raise ValueError(f"Invalid/empty CycloneDX inventory: {filename}")
         if filename.endswith("pip-audit.json"):
             if not data[key] or any(item.get("skip_reason") for item in data[key]):
@@ -139,16 +186,78 @@ def validate_reports():
         if filename.endswith("dependency-check-report.json"):
             validate_dependency_check(data)
     paths = [item[0] for item in reports()]
-    paths.extend(str(Path(path).with_suffix(".json")) for path in list(paths) if path.endswith(".xml"))
+    paths.extend(str(Path(path).with_suffix(".json")) for path in list(paths) if path.endswith("dependency-check-report.xml"))
+    if os.environ.get("OSSF_PROFILE") == "c":
+        paths.extend(("reports/conan-graph.json", "reports/grype-inventory.cdx.json"))
     return {filename: digest(filename) for filename in paths}
 
 
+def c_dependencies():
+    """Return declared Conan name/version identities after checking SBOM coverage."""
+    nodes = read_json("reports/conan-graph.json")["graph"]["nodes"]
+    if not isinstance(nodes, dict) or "0" not in nodes:
+        raise ValueError("Missing Conan root/dependency graph")
+    expected = set()
+    for key, node in nodes.items():
+        if key == "0":
+            continue
+        ref = node.get("ref", "").split("#", 1)[0].split("@", 1)[0]
+        if "/" not in ref:
+            raise ValueError("Unresolved Conan dependency")
+        expected.add(tuple(ref.split("/", 1)))
+    bom = read_json("reports/application-sbom.cdx.json")
+    if not bom.get("metadata", {}).get("component", {}).get("name"):
+        raise ValueError("C SBOM is missing its application identity")
+    actual = {(c.get("name"), c.get("version")) for c in bom.get("components", [])}
+    if not expected.issubset(actual) or (not expected and actual):
+        raise ValueError("Conan dependency graph and C SBOM do not match")
+    return expected
+
+
+def validate_grype(data):
+    """Check the current Grype DB, exact SBOM source and full scanned inventory."""
+    if not isinstance(data.get("matches"), list):
+        raise ValueError("Invalid Grype report")
+    if data.get("descriptor", {}).get("db", {}).get("status", {}).get("valid") is not True:
+        raise ValueError("Grype vulnerability database is not valid")
+    source = data.get("source", {})
+    if source.get("type") != "sbom-file" or Path(source.get("target", "")).resolve() != Path("reports/application-sbom.cdx.json").resolve():
+        raise ValueError("Grype scanned a different source")
+    inventory = read_json("reports/grype-inventory.cdx.json")
+    if inventory.get("bomFormat") != "CycloneDX":
+        raise ValueError("Invalid Grype CycloneDX inventory")
+    actual = {(item.get("name"), item.get("version")) for item in inventory.get("components", [])}
+    if not c_dependencies().issubset(actual):
+        raise ValueError("Grype inventory is missing Conan dependencies")
+    if any(m.get("vulnerability", {}).get("severity") not in (*SEVERITIES, "Negligible") for m in data["matches"]):
+        raise ValueError("Grype finding has an unknown severity")
+
+
+def require_c_analyzer():
+    """Refuse C analysis when the configured Sonar server lacks the C language."""
+    api = API(required("SONAR_HOST_URL"), required("SONAR_TOKEN"))
+    languages = api.json("GET", "/api/languages/list")["languages"]
+    if not any(item.get("key") == "c" for item in languages):
+        raise ValueError("C analysis requires a SonarQube CFamily analyzer; Community Build cannot analyze C")
+
+
 def validate_dependency_check(data):
-    if not data.get("dependencies") or data.get("scanInfo", {}).get("analysisExceptions"):
+    """Reject analysis errors and inventories empty outside the Java exception."""
+    if (not data.get("dependencies") and not (data.get("dependencies") == [] and empty_java_inventory())) or data.get("scanInfo", {}).get("analysisExceptions"):
         raise ValueError("Dependency-Check inventory is empty or analysis was incomplete")
 
 
+def empty_java_inventory():
+    """Recognize an identified Java application SBOM with zero external components."""
+    if os.environ.get("OSSF_PROFILE") != "java":
+        return False
+    bom = read_json("reports/application-sbom.cdx.json")
+    return (bom.get("bomFormat") == "CycloneDX" and bom.get("components") == []
+            and bool(bom.get("metadata", {}).get("component", {}).get("name")))
+
+
 def validate_npm_audit(data):
+    """Require npm audit v2 inventory/counts and recognized advisory severities."""
     if not isinstance(data, dict) or data.get("error") or data.get("auditReportVersion") != 2:
         raise ValueError("npm audit failed or returned an unsupported report")
     vulnerabilities = data.get("vulnerabilities")
@@ -164,6 +273,11 @@ def validate_npm_audit(data):
 def validate_dependency_inventory(data, sbom="reports/application-sbom.cdx.json", ecosystem="npm"):
     # Require every ecosystem identity from the application SBOM in OWASP.
     # This catches npm lock placeholders and Java scans with incomplete GAV IDs.
+    """Require every application npm/Maven PURL in the resolved OWASP inventory.
+
+    URL decoding and removal of qualifiers/fragments make tool identities
+    comparable; recursively includes packages nested in bundled dependencies.
+    """
     def purls(value):
         if isinstance(value, str) and value.startswith(f"pkg:{ecosystem}/"):
             return {unquote(value).split("?", 1)[0].split("#", 1)[0]}
@@ -174,11 +288,14 @@ def validate_dependency_inventory(data, sbom="reports/application-sbom.cdx.json"
         return set()
     expected = purls(read_json(sbom).get("components", []))
     actual = purls(data["dependencies"])
+    if not expected and empty_java_inventory():
+        return
     if not expected or not expected.issubset(actual):
         raise ValueError(f"Dependency-Check {ecosystem} inventory incomplete: {len(expected - actual)} SBOM identities missing")
 
 
 def audit():
+    """Audit the resolved .venv through .tools, allowing only a findings-only exit 1."""
     site_packages = subprocess.check_output(
         [".venv/bin/python", "-c", "import sysconfig; print(sysconfig.get_path('purelib'))"], text=True,
     ).strip()
@@ -197,6 +314,11 @@ def audit():
 
 
 def sonar_export():
+    """Wait for the task and export a commit-consistent Sonar analysis snapshot.
+
+    Writes findings/hotspots and quality-gate evidence under reports/. The latest
+    analysis must remain stable throughout paginated export.
+    """
     api = API(required("SONAR_HOST_URL"), required("SONAR_TOKEN"))
     task_info = dict(line.split("=", 1) for line in Path("reports/sonar-task.txt").read_text().splitlines() if "=" in line)
     project = required("SONAR_PROJECT_KEY")
@@ -248,6 +370,7 @@ def sonar_export():
 
 
 def findings(api, engagement):
+    """Read every active-finding page for an engagement and reject inconsistent pages."""
     path = f"/api/v2/findings/?test__engagement={engagement}&active=true&limit=100"
     seen = set()
     items = []
@@ -268,6 +391,11 @@ def findings(api, engagement):
 
 
 def gate():
+    """Import complete reports, apply release policy and write approval only on success.
+
+    Creates a distinct Dojo engagement for this project/pipeline/job. Policy
+    refusal retains gate-summary.json; earlier validation/API errors may not.
+    """
     Path("reports/approval.json").unlink(missing_ok=True)
     report_hashes = validate_reports()
     quality = read_json("reports/sonar-quality-gate.json")
@@ -313,14 +441,17 @@ def gate():
     # advisory merely because the importer assigned it a lower/default severity.
     if os.environ.get("OSSF_PROFILE") in ("angular", "angular-java"):
         dependency_findings = len(read_json("reports/npm-audit.json")["vulnerabilities"])
+    elif os.environ.get("OSSF_PROFILE") in ("java", "c"):
+        dependency_findings = 0
     else:
         dependency_findings = sum(len(item.get("vulns", [])) for item in read_json("reports/pip-audit.json")["dependencies"])
-    summary = {"engagement": engagement, "tests": imported, "counts": counts, "threshold": threshold,
+    c_errors = sum(e.get("severity") == "error" for e in ElementTree.parse("reports/cppcheck.xml").getroot().find("errors")) if os.environ.get("OSSF_PROFILE") == "c" else 0
+    summary = {"engagement": engagement, "tests": imported, "counts": counts, "threshold": threshold, "c_sast_errors": c_errors,
                "sonar_quality_gate": quality["projectStatus"]["status"], "dependency_advisories": dependency_findings,
                "unknown_scanner_severities": unknown_severities, "reports": report_hashes}
     write_json("reports/gate-summary.json", summary)
     print(json.dumps({key: summary[key] for key in ("engagement", "counts", "sonar_quality_gate", "dependency_advisories", "unknown_scanner_severities")}))
-    if blocked or dependency_findings or unknown_severities or summary["sonar_quality_gate"] != "OK":
+    if blocked or dependency_findings or unknown_severities or c_errors or summary["sonar_quality_gate"] != "OK":
         raise ValueError("Quality barrier refused publication; see reports/gate-summary.json")
     approval = {"commit": required("CI_COMMIT_SHA"), "pipeline": required("CI_PIPELINE_ID"), **summary,
                 "assets": {path: digest(path) for path in assets()}}
@@ -328,6 +459,12 @@ def gate():
 
 
 def publish():
+    """Verify approval and artifact bytes, then PUT/GET each Nexus file.
+
+    The repository is raw hosted. Approval is uploaded last; every read-back
+    digest must match. Partial uploads are not rolled back; Nexus ALLOW_ONCE
+    must enforce immutability of existing paths.
+    """
     approval = read_json("reports/approval.json")
     if approval["commit"] != required("CI_COMMIT_SHA") or approval["pipeline"] != required("CI_PIPELINE_ID"):
         raise ValueError("Approval belongs to another commit/pipeline")
@@ -356,7 +493,8 @@ def publish():
 
 
 def main():
-    commands = {"audit": audit, "sonar-export": sonar_export, "gate": gate, "publish": publish,
+    """Dispatch one CI command and return its process status without logging secrets."""
+    commands = {"audit": audit, "sonar-export": sonar_export, "gate": gate, "publish": publish, "require-c-analyzer": require_c_analyzer,
                 "validate-dependency-check": lambda: validate_dependency_check(read_json("reports/dependency-check-report.json"))}
     try:
         commands[sys.argv[1]]()

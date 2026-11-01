@@ -1,3 +1,4 @@
+# OSSF integration guide: docs/CI.md; assemble with security/prepare-example.py.
 # Generic Angular + Java/Maven security pipeline; see README.
 # The Maven OWASP plugin uses resolved GAV identities, including test dependencies.
 include:

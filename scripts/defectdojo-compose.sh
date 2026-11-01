@@ -1,7 +1,7 @@
 #!/bin/bash
 # VM 1: maintenance entry point (ps, logs, stop...) for the DefectDojo stack.
 # INSTALL_DIR and DD_* variables come from the same file used during installation.
-# Operate the installed stack with the same private configuration as the installer.
+# Runtime commands and diagnostics: docs/OPERATIONS.md.
 set -euo pipefail
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 # shellcheck source=scripts/config.sh

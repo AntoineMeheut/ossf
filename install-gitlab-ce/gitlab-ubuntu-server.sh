@@ -1,4 +1,5 @@
 #!/bin/bash
+# Contract and recovery: docs/INSTALLATION.md, docs/CONFIGURATION.md, docs/OPERATIONS.md.
 # VM 1: native GitLab CE and Runner; settings GITLAB_*, RUNNER_VERSION, WAIT_TIMEOUT.
 # This script installs the Runner; registering it with GitLab remains a separate step.
 # Install GitLab CE and GitLab Runner on Ubuntu 26.04.

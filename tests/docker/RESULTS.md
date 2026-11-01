@@ -1,8 +1,9 @@
 # Docker validation — 2026-09-27
 
 This is a historical installer validation record. Its CI-related entries describe
-the retired legacy templates; they do not certify a consuming application's
-current Django or Angular pipeline.
+the retired legacy templates and do not certify a consuming application's pipeline.
+See the [current validation guide](../../docs/VALIDATION.md) for the six-profile
+catalog and later checks.
 
 ## Shared configuration update
 

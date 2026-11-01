@@ -1,0 +1,9 @@
+**
+!Dockerfile
+!ci/
+!ci/entrypoint.sh
+!.ci-dist/
+!.ci-dist/**
+!wheelhouse/
+!wheelhouse/**
+!requirements.txt

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Library shared by the installers on VMs 1/2/3 and the DefectDojo wrapper.
 # Source this library from the repository; config/ossf.env is read as data, never executed.
-# Shared configuration reader. Values are data: never source/eval the private file.
+# Function contracts: docs/DEVELOPMENT.md; public key schema: config/ossf.env.example.
 # Errors identify the key or line, never a secret value.
 ossf_config_error() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 

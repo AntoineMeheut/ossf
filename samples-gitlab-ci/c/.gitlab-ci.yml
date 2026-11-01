@@ -1,0 +1,193 @@
+# OSSF integration guide: docs/CI.md; assemble with security/prepare-example.py.
+# Generic c pipeline. Assemble with security/prepare-example.py; see README.
+include:
+  - template: Jobs/Secret-Detection.gitlab-ci.yml
+  - template: Jobs/Container-Scanning.gitlab-ci.yml
+stages:
+  - prepare
+  - test
+  - build
+  - scan
+  - quality
+  - publish
+workflow:
+  rules:
+    - if: $CI_COMMIT_REF_PROTECTED == "true" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+default:
+  image: python:3.14.7-slim-trixie
+  tags:
+    - ossf-security
+  interruptible: true
+  timeout: 30m
+variables:
+  OSSF_PROFILE: c
+  PIP_CACHE_DIR: $CI_PROJECT_DIR/.cache/pip
+  GIT_DEPTH: '0'
+  DD_MIN_SEVERITY: High
+  SONAR_USER_HOME: $CI_PROJECT_DIR/.cache/sonar
+  SMOKE_SCRIPT: ci/smoke-image.sh
+  C_SOURCE_DIR: src
+  C_TEST_DIR: tests
+  C_EXECUTABLE: /usr/local/bin/app
+  CONAN_TOOLCHAIN_FILE: build/conan/conan_toolchain.cmake
+  GRYPE_DB_CACHE_DIR: $CI_PROJECT_DIR/.cache/grype
+.api_job:
+  before_script:
+    - pip install requests==2.34.2
+  image: python:3.14.7-slim-trixie
+secret_detection:
+  dependencies: []
+  allow_failure: false
+  image:
+    name: $SECURE_ANALYZERS_PREFIX/secrets:7
+    docker:
+      platform: linux/amd64
+  variables:
+    SECRET_DETECTION_HISTORIC_SCAN: 'true'
+  artifacts:
+    when: always
+    paths:
+      - gl-secret-detection-report.json
+build_container:
+  stage: build
+  image: docker:29.8.1-cli
+  services:
+    - name: docker:29.8.1-dind
+      alias: docker
+  variables:
+    DOCKER_HOST: tcp://docker:2376
+    DOCKER_TLS_CERTDIR: /certs
+    DOCKER_TLS_VERIFY: '1'
+    DOCKER_CERT_PATH: /certs/client
+  script:
+    - export APP_IMAGE="$CI_PROJECT_PATH_SLUG:$CI_COMMIT_SHA"
+    - docker build --pull --build-arg C_EXECUTABLE="$C_EXECUTABLE" --label "org.opencontainers.image.revision=$CI_COMMIT_SHA"
+      -t "$APP_IMAGE" .
+    - sh "$SMOKE_SCRIPT"
+    - mkdir -p dist
+    - docker save --output dist/image.tar "$APP_IMAGE"
+    - chmod 644 dist/image.tar
+  artifacts:
+    access: developer
+    expire_in: 1 day
+    paths:
+      - dist/image.tar
+      - dist/c-package.tar.gz
+  needs:
+    - application_tests
+container_scanning:
+  stage: scan
+  allow_failure: false
+  needs:
+    - build_container
+  dependencies:
+    - build_container
+  image:
+    name: $CS_ANALYZER_IMAGE
+    docker:
+      platform: linux/amd64
+  variables:
+    CS_IMAGE: archive://dist/image.tar
+    CS_INCLUDE_LICENSES: 'true'
+  artifacts:
+    when: always
+    paths:
+      - gl-container-scanning-report.json
+      - gl-sbom-report.cdx.json
+defectdojo_quality_barrier:
+  extends: .api_job
+  stage: quality
+  needs:
+    - secret_detection
+    - application_tests
+    - dependency_scanning
+    - build_container
+    - container_scanning
+  script:
+    - python ci/pipeline.py gate
+  artifacts:
+    when: always
+    access: developer
+    paths:
+      - reports/gate-summary.json
+      - reports/approval.json
+publish_nexus:
+  extends: .api_job
+  stage: publish
+  interruptible: false
+  needs:
+    - defectdojo_quality_barrier
+    - build_container
+    - application_tests
+    - container_scanning
+  script:
+    - python ci/pipeline.py publish
+application_tests:
+  stage: test
+  needs: []
+  before_script:
+    - pip install -r ci/requirements.txt
+  script:
+    - python ci/pipeline.py require-c-analyzer
+    - apt-get update && apt-get install -y --no-install-recommends build-essential cmake ninja-build cppcheck openjdk-21-jre-headless
+    - mkdir -p reports
+    - conan profile detect --force
+    - conan install . --lockfile=conan.lock --build=missing -s build_type=Release -of build/conan --deployer=./ci/sbom_deployer.py
+      --deployer-folder="$CI_PROJECT_DIR/reports" --format=json --out-file=reports/conan-graph.json
+    - cmake -S . -B build/coverage -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$CI_PROJECT_DIR/$CONAN_TOOLCHAIN_FILE"
+      -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_C_FLAGS=--coverage -DCMAKE_EXE_LINKER_FLAGS=--coverage
+    - cmake --build build/coverage --parallel 2
+    - ctest --test-dir build/coverage --output-on-failure --no-tests=error --output-junit "$CI_PROJECT_DIR/reports/junit-coverage.xml"
+    - gcovr --root . --filter "$C_SOURCE_DIR/" --sonarqube reports/coverage-sonar.xml --cobertura reports/coverage.xml
+      build/coverage
+    - cmake -S . -B build/release -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$CI_PROJECT_DIR/$CONAN_TOOLCHAIN_FILE"
+      -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+    - cmake --build build/release --parallel 2
+    - ctest --test-dir build/release --output-on-failure --no-tests=error --output-junit "$CI_PROJECT_DIR/reports/junit-release.xml"
+    - DESTDIR="$CI_PROJECT_DIR/.ci-dist" cmake --install build/release --prefix /usr/local
+    - python ci/package.py c
+    - cppcheck --enable=warning,style,performance,portability --inline-suppr --xml --xml-version=2 --project=build/release/compile_commands.json
+      2> reports/cppcheck.xml
+    - python ci/install-scanner.py
+    - ' .tools/sonar-scanner/bin/sonar-scanner -Dsonar.projectKey="$SONAR_PROJECT_KEY" -Dsonar.sources="$C_SOURCE_DIR"
+      -Dsonar.tests="$C_TEST_DIR" -Dsonar.scm.revision="$CI_COMMIT_SHA" -Dsonar.scanner.metadataFilePath="$CI_PROJECT_DIR/reports/sonar-task.txt"'
+    - python ci/pipeline.py sonar-export
+  artifacts:
+    when: always
+    access: developer
+    expire_in: 1 day
+    paths:
+      - reports/
+      - .ci-dist/
+      - dist/c-package.tar.gz
+    reports:
+      junit:
+        - reports/junit-coverage.xml
+        - reports/junit-release.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: reports/coverage.xml
+      cyclonedx: reports/application-sbom.cdx.json
+dependency_scanning:
+  stage: test
+  needs:
+    - application_tests
+  image:
+    name: anchore/grype:v0.121.0-debug@sha256:dd3d322f1f0ed0a5b09a26a25433f1c1273f075e2b2aea0078cddb09c0ad9b68
+    entrypoint:
+      - ''
+    docker:
+      user: '0:0'
+  cache:
+    key: grype-db
+    paths:
+      - .cache/grype/
+  script:
+    - /grype sbom:reports/application-sbom.cdx.json --config ci/grype.yaml --add-cpes-if-none -o json=reports/grype.json
+      -o cyclonedx-json=reports/grype-inventory.cdx.json
+  artifacts:
+    when: always
+    access: developer
+    paths:
+      - reports/grype.json
+      - reports/grype-inventory.cdx.json

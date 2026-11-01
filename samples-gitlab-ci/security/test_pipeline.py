@@ -181,6 +181,112 @@ class GateTests(unittest.TestCase):
             p.publish()
         api.assert_not_called()
 
+    def language_inventory(self, profile):
+        os.environ["OSSF_PROFILE"] = profile
+        if profile == "java":
+            p.write_json("reports/application-sbom.cdx.json", {"bomFormat": "CycloneDX", "components": [{"purl": "pkg:maven/example/library@1"}]})
+            p.write_json("reports/dependency-check-report.json", {"dependencies": [{"packages": [{"id": "pkg:maven/example/library@1"}]}]})
+        if profile == "c":
+            p.write_json("reports/application-sbom.cdx.json", {"bomFormat": "CycloneDX", "metadata": {"component": {"name": "application"}}, "components": [{"name": "zlib", "version": "1.2.11"}]})
+            p.write_json("reports/conan-graph.json", {"graph": {"nodes": {"0": {"ref": "conanfile"}, "1": {"ref": "zlib/1.2.11#recipe"}}}})
+            p.write_json("reports/grype.json", {"matches": [], "source": {"type": "sbom-file", "target": "reports/application-sbom.cdx.json"}, "descriptor": {"db": {"status": {"valid": True}}}})
+            p.write_json("reports/grype-inventory.cdx.json", {"bomFormat": "CycloneDX", "components": [{"name": "zlib", "version": "1.2.11"}]})
+            Path("reports/cppcheck.xml").write_text('<results version="2"><cppcheck version="2.17"/><errors/></results>')
+        for path in p.assets():
+            if not Path(path).exists():
+                Path(path).parent.mkdir(parents=True, exist_ok=True)
+                Path(path).write_bytes(b"native-build-artifact")
+
+    def test_three_language_profiles_require_their_native_package(self):
+        for profile, count in (("python", 8), ("java", 7), ("c", 7)):
+            with self.subTest(profile=profile):
+                self.language_inventory(profile)
+                self.run_gate()
+                approval = p.read_json("reports/approval.json")
+                self.assertEqual(len(approval["tests"]), count)
+                self.assertEqual(len(approval["assets"]), 4)
+                self.assertIn(p.assets()[1], approval["assets"])
+
+    def test_modified_native_packages_cannot_be_published(self):
+        for profile in ("python", "java", "c"):
+            with self.subTest(profile=profile):
+                self.language_inventory(profile)
+                self.run_gate()
+                Path(p.assets()[1]).write_bytes(b"modified-package")
+                with patch.object(p, "API") as api, self.assertRaises(ValueError):
+                    p.publish()
+                api.assert_not_called()
+
+    def test_java_requires_full_maven_inventory(self):
+        self.language_inventory("java")
+        p.write_json("reports/dependency-check-report.json", {"dependencies": [{"fileName": "unidentified.jar"}]})
+        with self.assertRaisesRegex(ValueError, "maven inventory incomplete"):
+            self.run_gate()
+
+    def test_java_without_external_dependencies_has_a_valid_empty_inventory(self):
+        self.language_inventory("java")
+        p.write_json("reports/application-sbom.cdx.json", {"bomFormat": "CycloneDX", "metadata": {"component": {"name": "application"}}, "components": []})
+        p.write_json("reports/dependency-check-report.json", {"dependencies": []})
+        Path("reports/dependency-check-report.xml").write_text('<analysis><dependencies/></analysis>')
+        self.run_gate()
+
+    def test_c_grype_inventory_cannot_skip_a_conan_dependency(self):
+        self.language_inventory("c")
+        p.write_json("reports/grype-inventory.cdx.json", {"bomFormat": "CycloneDX", "components": []})
+        with self.assertRaisesRegex(ValueError, "missing Conan"):
+            self.run_gate()
+        self.api.json.assert_not_called()
+
+    def test_c_empty_inventory_requires_a_matching_empty_conan_graph(self):
+        self.language_inventory("c")
+        bom = p.read_json("reports/application-sbom.cdx.json")
+        bom["components"] = []
+        p.write_json("reports/application-sbom.cdx.json", bom)
+        with self.assertRaisesRegex(ValueError, "graph and C SBOM"):
+            self.run_gate()
+        p.write_json("reports/conan-graph.json", {"graph": {"nodes": {"0": {"ref": "conanfile"}}}})
+        self.run_gate()
+
+    def test_c_invalid_grype_database_blocks(self):
+        self.language_inventory("c")
+        data = p.read_json("reports/grype.json")
+        data["descriptor"]["db"]["status"]["valid"] = False
+        p.write_json("reports/grype.json", data)
+        with self.assertRaisesRegex(ValueError, "database"):
+            self.run_gate()
+
+    def test_c_grype_unknown_severity_blocks_but_negligible_is_recognized(self):
+        self.language_inventory("c")
+        data = p.read_json("reports/grype.json")
+        data["matches"] = [{"vulnerability": {"severity": "Unknown"}}]
+        with self.assertRaisesRegex(ValueError, "unknown severity"):
+            p.validate_grype(data)
+        data["matches"][0]["vulnerability"]["severity"] = "Negligible"
+        p.validate_grype(data)
+
+    def test_cppcheck_analysis_failure_cannot_approve(self):
+        self.language_inventory("c")
+        Path("reports/cppcheck.xml").write_text('<results><cppcheck/><errors><error id="internalError" severity="error"/></errors></results>')
+        with self.assertRaisesRegex(ValueError, "complete source"):
+            self.run_gate()
+        self.api.json.assert_not_called()
+
+    def test_cppcheck_error_blocks_even_if_importer_downgrades_it(self):
+        self.language_inventory("c")
+        Path("reports/cppcheck.xml").write_text('<results><cppcheck/><errors><error id="nullPointer" severity="error"/></errors></results>')
+        with self.assertRaises(ValueError):
+            self.run_gate()
+        self.assertEqual(p.read_json("reports/gate-summary.json")["c_sast_errors"], 1)
+
+    def test_c_analysis_cannot_silently_use_a_server_without_c_support(self):
+        api = MagicMock()
+        api.json.return_value = {"languages": [{"key": "py"}]}
+        with patch.dict(os.environ, {"SONAR_HOST_URL": "https://sonar.invalid", "SONAR_TOKEN": "test-only-placeholder"}), patch.object(p, "API", return_value=api):
+            with self.assertRaisesRegex(ValueError, "CFamily"):
+                p.require_c_analyzer()
+            api.json.return_value = {"languages": [{"key": "c"}]}
+            p.require_c_analyzer()
+
     def fullstack_inventory(self):
         os.environ["OSSF_PROFILE"] = "angular-java"
         for filename, _, key in p.reports():
@@ -253,10 +359,12 @@ class GateTests(unittest.TestCase):
         api.assert_not_called()
 
     def test_publisher_uploads_the_approved_bytes_and_checks_readback(self):
-        for profile, expected_count in (("django", 4), ("angular-java", 8)):
+        for profile, expected_count in (("django", 4), ("angular-java", 8), ("python", 5), ("java", 5), ("c", 5)):
             with self.subTest(profile=profile):
                 if profile == "angular-java":
                     self.fullstack_inventory()
+                elif profile in ("python", "java", "c"):
+                    self.language_inventory(profile)
                 self.run_gate()
                 stored = {}
                 api = MagicMock()

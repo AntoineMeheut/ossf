@@ -1,3 +1,4 @@
+# OSSF integration guide: docs/CI.md; assemble with security/prepare-example.py.
 # Assemble with security/prepare-example.py angular DEST (no application source is copied).
 # GitLab CE: npm audit + OWASP Dependency-Check replace Ultimate-only DS.
 include:

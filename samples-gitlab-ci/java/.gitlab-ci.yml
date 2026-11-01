@@ -1,0 +1,215 @@
+# OSSF integration guide: docs/CI.md; assemble with security/prepare-example.py.
+# Generic java pipeline. Assemble with security/prepare-example.py; see README.
+include:
+  - template: Jobs/Secret-Detection.gitlab-ci.yml
+  - template: Jobs/SAST.gitlab-ci.yml
+  - template: Jobs/Container-Scanning.gitlab-ci.yml
+stages:
+  - prepare
+  - test
+  - build
+  - scan
+  - quality
+  - publish
+workflow:
+  rules:
+    - if: $CI_COMMIT_REF_PROTECTED == "true" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+default:
+  image: maven:3.9.16-eclipse-temurin-17@sha256:1a352420f7aba21f5ad08df31bab55f74c013fb491f1ae8ab1dd7ff9ed698584
+  tags:
+    - ossf-security
+  interruptible: true
+  timeout: 30m
+variables:
+  OSSF_PROFILE: java
+  PIP_CACHE_DIR: $CI_PROJECT_DIR/.cache/pip
+  GIT_DEPTH: '0'
+  DD_MIN_SEVERITY: High
+  SONAR_USER_HOME: $CI_PROJECT_DIR/.cache/sonar
+  NVD_DATAFEED: https://dependency-check.github.io/DependencyCheck_Builder/nvd_cache/nvdcve-{0}.json.gz
+  SAST_EXCLUDED_ANALYZERS: gitlab-advanced-sast,gitlab-advanced-sast-cpp,gitlab-advanced-sast-ext
+  SMOKE_SCRIPT: ci/smoke-image.sh
+  MAVEN_OPTS: -Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository
+  JAVA_SOURCE: '17'
+  JAVA_JAR_GLOB: target/*.jar
+.api_job:
+  before_script:
+    - pip install requests==2.34.2
+  image: python:3.14.7-slim-trixie
+secret_detection:
+  dependencies: []
+  allow_failure: false
+  image:
+    name: $SECURE_ANALYZERS_PREFIX/secrets:7
+    docker:
+      platform: linux/amd64
+  variables:
+    SECRET_DETECTION_HISTORIC_SCAN: 'true'
+  artifacts:
+    when: always
+    paths:
+      - gl-secret-detection-report.json
+semgrep-sast:
+  dependencies: []
+  allow_failure: false
+  image:
+    name: $SECURE_ANALYZERS_PREFIX/semgrep:6
+    docker:
+      platform: linux/amd64
+  artifacts:
+    when: always
+    paths:
+      - gl-sast-report.json
+  rules:
+    - if: $CI_COMMIT_REF_PROTECTED == "true" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+sonarqube:
+  stage: test
+  needs:
+    - application_tests
+  resource_group: sonarqube-analysis
+  image:
+    name: sonarsource/sonar-scanner-cli@sha256:47956b669bf486bdad919e1cbd0533223515aa0b6d1d31763e5a3754942df6d7
+    entrypoint:
+      - ''
+    docker:
+      platform: linux/amd64
+  script:
+    - mkdir -p reports
+    - sh ci/sonar-scan.sh
+    - python3 -m pip install --target .sonar-tools requests==2.34.2
+    - PYTHONPATH="$CI_PROJECT_DIR/.sonar-tools" python3 ci/pipeline.py sonar-export
+  artifacts:
+    when: always
+    access: developer
+    paths:
+      - reports/sonar-task.txt
+      - reports/sonarqube.json
+      - reports/sonar-quality-gate.json
+build_container:
+  stage: build
+  image: docker:29.8.1-cli
+  services:
+    - name: docker:29.8.1-dind
+      alias: docker
+  variables:
+    DOCKER_HOST: tcp://docker:2376
+    DOCKER_TLS_CERTDIR: /certs
+    DOCKER_TLS_VERIFY: '1'
+    DOCKER_CERT_PATH: /certs/client
+  script:
+    - export APP_IMAGE="$CI_PROJECT_PATH_SLUG:$CI_COMMIT_SHA"
+    - docker build --pull --label "org.opencontainers.image.revision=$CI_COMMIT_SHA" -t "$APP_IMAGE" .
+    - sh "$SMOKE_SCRIPT"
+    - mkdir -p dist
+    - docker save --output dist/image.tar "$APP_IMAGE"
+    - chmod 644 dist/image.tar
+  artifacts:
+    access: developer
+    expire_in: 1 day
+    paths:
+      - dist/image.tar
+      - dist/application.jar
+  needs:
+    - application_tests
+container_scanning:
+  stage: scan
+  allow_failure: false
+  needs:
+    - build_container
+  dependencies:
+    - build_container
+  image:
+    name: $CS_ANALYZER_IMAGE
+    docker:
+      platform: linux/amd64
+  variables:
+    CS_IMAGE: archive://dist/image.tar
+    CS_INCLUDE_LICENSES: 'true'
+  artifacts:
+    when: always
+    paths:
+      - gl-container-scanning-report.json
+      - gl-sbom-report.cdx.json
+defectdojo_quality_barrier:
+  extends: .api_job
+  stage: quality
+  needs:
+    - secret_detection
+    - semgrep-sast
+    - owasp_dependency_check
+    - sonarqube
+    - application_tests
+    - build_container
+    - container_scanning
+  script:
+    - python ci/pipeline.py gate
+  artifacts:
+    when: always
+    access: developer
+    paths:
+      - reports/gate-summary.json
+      - reports/approval.json
+publish_nexus:
+  extends: .api_job
+  stage: publish
+  interruptible: false
+  needs:
+    - defectdojo_quality_barrier
+    - build_container
+    - application_tests
+    - container_scanning
+  script:
+    - python ci/pipeline.py publish
+application_tests:
+  stage: test
+  image: maven:3.9.16-eclipse-temurin-17@sha256:1a352420f7aba21f5ad08df31bab55f74c013fb491f1ae8ab1dd7ff9ed698584
+  needs: []
+  cache:
+    key: maven-java17
+    paths:
+      - .m2/repository/
+  script:
+    - mvn -B -DfailIfNoTests=true verify dependency:copy-dependencies -DincludeScope=test
+    - test -s target/site/jacoco/jacoco.xml
+    - mvn -B org.cyclonedx:cyclonedx-maven-plugin:2.9.3:makeAggregateBom -DschemaVersion=1.6 -DoutputFormat=json
+      -DincludeTestScope=true -DoutputDirectory="$CI_PROJECT_DIR/reports" -DoutputName=application-sbom.cdx -Dcyclonedx.skipAttach=true
+    - apt-get update && apt-get install -y --no-install-recommends python3
+    - python3 ci/package.py java
+  artifacts:
+    when: always
+    access: developer
+    expire_in: 1 day
+    paths:
+      - target/
+      - dist/application.jar
+      - reports/application-sbom.cdx.json
+    reports:
+      junit: target/surefire-reports/TEST-*.xml
+      cyclonedx: reports/application-sbom.cdx.json
+owasp_dependency_check:
+  stage: test
+  needs:
+    - application_tests
+  image: maven:3.9.16-eclipse-temurin-17@sha256:1a352420f7aba21f5ad08df31bab55f74c013fb491f1ae8ab1dd7ff9ed698584
+  timeout: 1h
+  resource_group: dependency-check-cache
+  variables:
+    MAVEN_OPTS: -Xmx2g -Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository
+  cache:
+    - key: maven-java17
+      paths:
+        - .m2/repository/
+    - key: dependency-check-maven-2026-11
+      paths:
+        - .cache/dependency-check/
+  script:
+    - mkdir -p reports .cache/dependency-check
+    - mvn -B org.owasp:dependency-check-maven:13.0.0:check -DskipTestScope=false -DfailOnError=true -DdataDirectory="$CI_PROJECT_DIR/.cache/dependency-check"
+      -DnvdDatafeedUrl="$NVD_DATAFEED" -DossIndexAnalyzerEnabled=false -Dformats=JSON,XML,HTML -Dodc.outputDirectory="$CI_PROJECT_DIR/reports"
+  artifacts:
+    when: always
+    access: developer
+    paths:
+      - reports/dependency-check-report.json
+      - reports/dependency-check-report.xml
+      - reports/dependency-check-report.html

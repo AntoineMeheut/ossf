@@ -1,0 +1,6 @@
+match:
+  stock:
+    using-cpes: true
+db:
+  validate-age: true
+  require-update-check: true

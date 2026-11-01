@@ -1,6 +1,6 @@
 #!/bin/bash
 # Administration workstation: generate secrets once, then copy the file to the VMs.
-# Create once, on the administration workstation; copy the same file to the VMs.
+# Format and lifecycle: docs/CONFIGURATION.md; consumers must never source the file.
 set -euo pipefail
 umask 077
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)

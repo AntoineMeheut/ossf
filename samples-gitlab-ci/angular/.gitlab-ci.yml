@@ -1,39 +1,34 @@
-# Assemble this overlay with security/prepare-example.py (shared ci/pipeline.py is required).
-# Surfnews/Drupal CE profile: Composer audit + OWASP Dependency-Check replace Ultimate-only DS.
+# Assemble with security/prepare-example.py angular DEST (no application source is copied).
+# GitLab CE: npm audit + OWASP Dependency-Check replace Ultimate-only DS.
 include:
   - template: Jobs/Secret-Detection.gitlab-ci.yml
   - template: Jobs/SAST.gitlab-ci.yml
   - template: Jobs/Container-Scanning.gitlab-ci.yml
 
 stages: [prepare, test, build, scan, quality, publish]
-
-# Tokens and a privileged Docker runner are reserved for trusted protected refs.
-# Community Build analyzes one branch: use a separate SONAR_PROJECT_KEY per app/ref.
 workflow:
   rules:
     - if: '$CI_COMMIT_REF_PROTECTED == "true" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
 
 default:
-  image: php:8.5.10-cli-trixie
+  image: node:22.23.2-bookworm-slim@sha256:48e4b67d85f87bd551df43704e24d252f56cc5f8e9718841aace50f19948f0f9
   tags: [ossf-security]
   interruptible: true
   timeout: 30m
 
 variables:
-  OSSF_PROFILE: surfnews
-  COMPOSER_ALLOW_SUPERUSER: "1"
-  COMPOSER_CACHE_DIR: "$CI_PROJECT_DIR/.cache/composer"
+  OSSF_PROFILE: angular
+  CI: "true"
+  ANGULAR_DIST_DIR: "dist/app/browser"
+  ANGULAR_SMOKE_PATH: "/"
+  CHROME_BIN: /usr/bin/chromium
   GIT_DEPTH: "0"
   DD_MIN_SEVERITY: High
+  NG_CLI_ANALYTICS: "false"
+  npm_config_cache: "$CI_PROJECT_DIR/.npm"
   SONAR_USER_HOME: "$CI_PROJECT_DIR/.cache/sonar"
   NVD_DATAFEED: "https://dependency-check.github.io/DependencyCheck_Builder/nvd_cache/nvdcve-{0}.json.gz"
-  # Use the open-source Semgrep analyzer, including PHP support.
   SAST_EXCLUDED_ANALYZERS: "gitlab-advanced-sast,gitlab-advanced-sast-cpp,gitlab-advanced-sast-ext"
-
-.php_job:
-  needs: [resolve_dependencies]
-  before_script:
-    - sh ci/php-setup.sh
 
 .api_job:
   image: python:3.14.7-slim-trixie
@@ -41,26 +36,31 @@ variables:
     - pip install requests==2.34.2
 
 resolve_dependencies:
-  extends: .php_job
-  needs: []
   stage: prepare
   script:
-    - composer validate --no-check-publish
-    - composer install --prefer-dist --no-interaction --no-progress
+    - npm ci --no-audit --no-fund
   cache:
-    key: composer-surfnews
-    paths: [.cache/composer/]
+    key: "npm-angular-$CI_RUNNER_EXECUTABLE_ARCH"
+    paths: [.npm/]
   artifacts:
     access: developer
     expire_in: 1 day
-    paths: [vendor/, web/core/, web/modules/contrib/, web/profiles/contrib/, web/libraries/]
+    paths: [node_modules/]
 
-surfnews_tests:
-  extends: .php_job
+angular_tests:
   stage: test
+  needs: [resolve_dependencies]
   script:
-    - find web/themes/aloha_surf -type f \( -name '*.php' -o -name '*.theme' -o -name '*.inc' \) -print0 | xargs -0 -n1 php -l
-    - php ci/test-theme.php
+    - apt-get update && apt-get install -y --no-install-recommends chromium
+    - npm run test:ci
+    - npm run build:ci
+    - test -f "$ANGULAR_DIST_DIR/index.html"
+    - mkdir -p .ci-dist
+    - cp -R "$ANGULAR_DIST_DIR"/. .ci-dist/
+  artifacts:
+    access: developer
+    expire_in: 1 day
+    paths: [.ci-dist/, coverage/]
 
 # All three GitLab analyzers are actual official images/templates. AMD64 is
 # mandatory; on the ARM lab runner this requires binfmt/QEMU (see README).
@@ -80,33 +80,28 @@ secret_detection:
 semgrep-sast:
   dependencies: []
   allow_failure: false
-  # Semgrep's PHP extension matching omits Drupal's .theme/.module/.inc files.
-  # Scan byte-identical .php aliases, then restore the original report paths.
-  script:
-    - python3 ci/drupal-sast.py prepare
-    - /analyzer run
-    - python3 ci/drupal-sast.py normalize
   image:
     name: "$SECURE_ANALYZERS_PREFIX/semgrep:6"
     docker:
       platform: linux/amd64
   artifacts:
     when: always
-    paths: [gl-sast-report.json, reports/sast-aliases.json]
+    paths: [gl-sast-report.json]
 
-composer_audit:
-  extends: .php_job
+npm_audit:
   stage: test
+  needs: [resolve_dependencies]
+  dependencies: []
   script:
     - mkdir -p reports
     - |
       status=0
-      composer audit --locked --format=json > reports/composer-audit.json || status=$?
-      php ci/check-composer-audit.php "$status"
+      npm audit --package-lock-only --json > reports/npm-audit.json || status=$?
+      node ci/check-npm-audit.cjs "$status"
   artifacts:
     when: always
     access: developer
-    paths: [reports/composer-audit.json]
+    paths: [reports/npm-audit.json]
 
 owasp_dependency_check:
   stage: test
@@ -123,10 +118,12 @@ owasp_dependency_check:
     key: dependency-check-2026-11
     paths: [.cache/dependency-check/]
   script:
-    - mkdir -p reports .cache/dependency-check
+    - mkdir -p reports .cache/dependency-check .odc-input
+    - cp package.json package-lock.json .odc-input/
+    - ln -s "$CI_PROJECT_DIR/node_modules" .odc-input/node_modules
     - >-
       /usr/share/dependency-check/bin/dependency-check.sh
-      --project "$CI_PROJECT_PATH" --scan composer.lock --enableExperimental
+      --project "$CI_PROJECT_PATH" --scan .odc-input/package-lock.json
       --data .cache/dependency-check --nvdDatafeed "$NVD_DATAFEED"
       --disableOssIndex --format JSON --format XML --format HTML --out reports
   artifacts:
@@ -134,14 +131,13 @@ owasp_dependency_check:
     access: developer
     paths: [reports/dependency-check-report.json, reports/dependency-check-report.xml, reports/dependency-check-report.html]
 
-composer_sbom:
-  extends: .php_job
+npm_sbom:
   stage: test
+  needs: [resolve_dependencies]
   script:
     - mkdir -p reports
-    - composer global config --no-plugins allow-plugins.cyclonedx/cyclonedx-php-composer true
-    - composer global require --no-interaction cyclonedx/cyclonedx-php-composer:6.2.0
-    - composer CycloneDX:make-sbom --output-format=JSON --spec-version=1.6 --output-file=reports/application-sbom.cdx.json
+    - npm install --prefix /tmp/sbom-tools --ignore-scripts --no-audit --no-fund @cyclonedx/cyclonedx-npm@6.0.1
+    - /tmp/sbom-tools/node_modules/.bin/cyclonedx-npm --spec-version 1.6 --output-format JSON --output-reproducible --output-file reports/application-sbom.cdx.json
   artifacts:
     access: developer
     paths: [reports/application-sbom.cdx.json]
@@ -150,7 +146,7 @@ composer_sbom:
 
 sonarqube:
   stage: test
-  needs: [surfnews_tests]
+  needs: [angular_tests]
   resource_group: sonarqube-analysis
   image:
     name: "sonarsource/sonar-scanner-cli@sha256:47956b669bf486bdad919e1cbd0533223515aa0b6d1d31763e5a3754942df6d7"
@@ -169,6 +165,7 @@ sonarqube:
 
 build_container:
   stage: build
+  needs: [angular_tests]
   image: docker:29.8.1-cli
   services:
     - name: docker:29.8.1-dind
@@ -179,10 +176,22 @@ build_container:
     DOCKER_TLS_VERIFY: "1"
     DOCKER_CERT_PATH: /certs/client
   script:
-    - docker info
     - export APP_IMAGE="$CI_PROJECT_PATH_SLUG:$CI_COMMIT_SHA"
     - docker build --pull --label "org.opencontainers.image.revision=$CI_COMMIT_SHA" -t "$APP_IMAGE" .
-    - docker run --rm --entrypoint php "$APP_IMAGE" -r 'require "/app/vendor/autoload.php"; if (!class_exists("Drupal\\Core\\DrupalKernel")) { exit(1); }'
+    - docker run -d --name smoke "$APP_IMAGE"
+    - trap 'docker rm -f smoke >/dev/null 2>&1 || true' EXIT
+    - |
+      ready=false
+      for attempt in $(seq 1 30); do
+        if docker exec smoke wget -q -O /tmp/index.html "http://127.0.0.1:8080$ANGULAR_SMOKE_PATH"; then
+          docker cp smoke:/tmp/index.html /tmp/image-index.html
+          cmp .ci-dist/index.html /tmp/image-index.html
+          ready=true
+          break
+        fi
+        sleep 2
+      done
+      test "$ready" = true
     - mkdir -p dist
     - docker save --output dist/image.tar "$APP_IMAGE"
     - chmod 644 dist/image.tar
@@ -211,7 +220,7 @@ container_scanning:
 defectdojo_quality_barrier:
   extends: .api_job
   stage: quality
-  needs: [secret_detection, semgrep-sast, composer_audit, owasp_dependency_check, composer_sbom, sonarqube, build_container, container_scanning]
+  needs: [secret_detection, semgrep-sast, npm_audit, owasp_dependency_check, npm_sbom, sonarqube, build_container, container_scanning]
   script:
     - python ci/pipeline.py gate
   artifacts:
@@ -223,6 +232,6 @@ publish_nexus:
   extends: .api_job
   stage: publish
   interruptible: false
-  needs: [defectdojo_quality_barrier, build_container, composer_sbom, container_scanning]
+  needs: [defectdojo_quality_barrier, build_container, npm_sbom, container_scanning]
   script:
     - python ci/pipeline.py publish

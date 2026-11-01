@@ -269,44 +269,248 @@ application upgrade command.
 
 ## GitLab CI examples
 
-For the original Audit examples, copy one file from `samples-gitlab-ci/` to a
-project's `.gitlab-ci.yml` and adapt it. Prepare the complete Django or Surfnews
-overlay using the linked setup guide:
+Two reusable examples are provided: [Django](samples-gitlab-ci/django/.gitlab-ci.yml)
+and [Angular](samples-gitlab-ci/angular/.gitlab-ci.yml). They contain CI configuration
+and helper scripts, with no application source, project-specific tests or private
+execution reports. Integrate an example into your own application's GitLab repository.
 
-| Example | Runtime | Project prerequisites |
+### What each pipeline does
+
+| Step | Django | Angular |
 | --- | --- | --- |
-| `AuditDocker.gitlab-ci.yml` | Docker 29.8.1 CLI and DinD | Dockerfile, container registry, privileged Docker executor sharing `/certs/client` |
-| `AuditMaven.gitlab-ci.yml` | Maven 3.9.16, Temurin JDK 25 | Compatible `pom.xml`; `ci_settings.xml` and a deployment repository on the default branch |
-| `AuditNpm.gitlab-ci.yml` | Node.js 26.10.0 | Scoped npm package and package registry access |
-| `AuditPython.gitlab-ci.yml` | Python 3.14.7 | Package with test extras, tox `py`/`ruff` environments, Sphinx docs for Pages |
-| [Django security CI](samples-gitlab-ci/django/.gitlab-ci.yml) | Django/Python, Docker Runner | [Setup and release policy](samples-gitlab-ci/security/README.md); protected service tokens |
-| [Surfnews security CI](samples-gitlab-ci/surfnews/.gitlab-ci.yml) | Existing Drupal/PHP/Composer application | Same security chain, adapted to the supplied Surfnews source |
+| Dependencies | Resolve the application's requirements.txt into wheels | Install the application's package-lock.json with npm ci |
+| Application checks | Run the project's Django tests and collect Python coverage | Run the project's test:ci and build:ci npm scripts |
+| Secrets | Official GitLab Secret Detection, including repository history | Same |
+| Dependency security | pip-audit and OWASP Dependency-Check | npm audit and OWASP Dependency-Check |
+| Code quality | SonarQube with Python coverage | SonarQube with the project's LCOV report |
+| SAST | Official GitLab Semgrep SAST | Same |
+| Build | Application Docker image served by Gunicorn | Nginx Docker image containing the tested production SPA bundle |
+| Image security | Official GitLab Container Scanning on the built image archive | Same |
+| Inventory | Application and container CycloneDX SBOMs | Same |
+| Release barrier | Import eight reports into DefectDojo and evaluate the policy | Same |
+| Publication | Upload the approved image, both SBOMs and approval evidence to Nexus | Same |
 
-CI jobs use GitLab's **temporary job credentials**, which cannot be generated
-in advance by the installation configuration:
+GitLab CE does not provide Ultimate's native Dependency Scanning. The ecosystem
+audit and OWASP jobs above are the explicit CE alternatives. Reports remain
+available as CI artifacts; Ultimate vulnerability dashboards are not assumed.
 
-| Example | Credentials supplied at job execution |
-| --- | --- |
-| Docker registry | `CI_REGISTRY_USER`, `CI_REGISTRY_PASSWORD`, `CI_REGISTRY` |
-| npm package registry | `CI_JOB_TOKEN`, with the project's GitLab API URL/ID |
-| Maven package registry | `CI_JOB_TOKEN`, referenced by the supplied `ci_settings.xml` |
-| Python tests/build/Pages | No additional deployment credential is used |
+### Prepare an overlay and integrate it into your application
 
-For Maven, also copy [samples-gitlab-ci/ci_settings.xml](samples-gitlab-ci/ci_settings.xml)
-to the project's root. Its server ID `gitlab-maven` must match your `pom.xml`
-repository/distribution management ID. It reads the job token from the environment
-using [GitLab's Maven registry authentication](https://docs.gitlab.com/user/packages/maven_repository/).
-Do not upload the infrastructure administrator configuration to CI jobs. Runner
-registration still uses an authentication token issued by GitLab after creating
-a runner; registration is not performed by the installation script.
+Run from your checkout of this repository, choosing **one** profile:
 
-The four original Audit examples build, test or publish application artifacts.
-The new [security examples](samples-gitlab-ci/security/README.md) connect the GitLab
-scanners, ecosystem dependency audits, OWASP Dependency-Check, SonarQube, CycloneDX,
-DefectDojo and Nexus. They use explicit CE-compatible alternatives to Ultimate-only
-Dependency Scanning and publish only after the release policy accepts all results.
-The Python deployment job is a placeholder to replace before enabling production
-deployment.
+```sh
+python3 samples-gitlab-ci/security/prepare-example.py django /tmp/django-ci-overlay
+# Or, for an Angular application:
+python3 samples-gitlab-ci/security/prepare-example.py angular /tmp/angular-ci-overlay
+```
+
+The destination must be new. The tool copies only the selected CI template and
+installs the shared helper as `ci/pipeline.py`; it never reads or copies your
+application source. Review the overlay, then integrate these files at the root of
+your application's repository, next to manage.py or package.json:
+
+```text
+.gitlab-ci.yml
+Dockerfile
+.dockerignore
+.gitignore
+sonar-project.properties
+ci/                     # includes the required shared pipeline.py
+```
+
+Merge existing CI, Docker, ignore and Sonar files instead of overwriting them.
+Keep your own dependency manifests, lock files, source and tests. The Django
+`requirements.txt.example` is an optional starting point for a new application;
+it must not replace an existing project's requirements.txt. Commit the integrated
+files in the **application's GitLab repository** after completing the setup below.
+
+### Adapt the Django example
+
+1. Provide manage.py at the repository root and a requirements.txt containing
+   your application's complete, pinned dependency set, including Gunicorn. The
+   tool dependencies are separate, in ci/requirements.txt.
+2. Set `DJANGO_WSGI_MODULE` in .gitlab-ci.yml or a GitLab variable, for example
+   `myproject.wsgi:application`. The Docker build records this non-secret module
+   name in the image. All application packages, templates and static files are
+   copied through the generic Dockerfile; review .dockerignore for your project.
+3. Keep `python manage.py test` as the test contract, or change django_tests to
+   your existing runner. Configure test settings, required environment variables
+   and any database/cache service your tests need. `DJANGO_SETTINGS_MODULE` can
+   select a dedicated CI settings module. The sample generates DJANGO_SECRET_KEY
+   for tests; adapt your settings if your application uses a different variable.
+4. Provide a lightweight HTTP endpoint that returns 200 without a database query,
+   and set `DJANGO_SMOKE_PATH` to its path (default `/health/`). For example, add
+   `path("health/", lambda request: JsonResponse({"status": "ok"}))` to your URL
+   configuration, importing path and JsonResponse. The runtime smoke test uses
+   127.0.0.1:8000: allow that host in your CI settings, read DJANGO_SECRET_KEY from
+   the environment, and provide any other startup configuration in build_container.
+5. Review sonar-project.properties. The default discovers Python source and common
+   test filenames under the repository root, and reads coverage.xml. Adjust the
+   source/test paths for a src layout, multiple packages or different test naming.
+6. Choose a Python release supported by your application. The example pins Python
+   3.14.7; update the job images, Dockerfile and Sonar Python version together when
+   changing it. pip-audit discovers the application virtualenv's site-packages
+   dynamically. Wheel resolution uses binary wheels only: dependencies needing
+   compilation or system libraries require adapting resolution and the Dockerfile.
+
+Supply production secrets, database configuration and static-file serving at
+runtime. The sample image runs Gunicorn as UID 10001; it does not run migrations,
+collectstatic or deploy the application automatically.
+
+### Adapt the Angular example
+
+1. Keep your own package.json, package-lock.json, angular.json, source and tests.
+   The example expects an npm-managed workspace at the repository root. For a
+   monorepo, adapt working directories, artifact paths and Sonar source paths.
+2. Add two scripts to your package.json, using the actual workspace project name
+   and the test builder already installed in your project. For a current Angular
+   Vitest builder, an example is:
+
+   ```json
+   {
+     "scripts": {
+       "test:ci": "ng test my-app --watch=false --coverage --coverage-reporters=lcov",
+       "build:ci": "ng build my-app --configuration production"
+     }
+   }
+   ```
+
+   [Angular's test command reference](https://angular.dev/cli/test) documents the
+   current options. Older Karma builders may use `--code-coverage` instead of
+   `--coverage`. Keep the command compatible with your installed Angular version.
+   A missing test:ci script or a failing test fails the pipeline; tests are not
+   silently replaced by a smoke test.
+3. The job installs Chromium and sets `CHROME_BIN=/usr/bin/chromium`. If your Karma
+   configuration runs a real browser as root in the CI container, define a custom
+   launcher such as `ChromeHeadlessCI` with base `ChromeHeadless` and flags
+   `["--no-sandbox"]`, and select it with `--browsers=ChromeHeadlessCI`. Vitest/jsdom
+   tests can use their normal non-browser mode. Use your project's own dependencies
+   and test configuration; no application-specific browser scenario is injected.
+4. Set `ANGULAR_DIST_DIR` to the directory containing the built index.html, such as
+   `dist/my-app/browser` or `dist/my-app`. The default is `dist/app/browser`.
+   After successful tests/build, the pipeline copies this directory to `.ci-dist/`.
+   The Dockerfile copies that exact tested bundle into Nginx; it does not rebuild it.
+5. Set `ANGULAR_SMOKE_PATH` to an appropriate public route (default `/`). The image
+   smoke check compares its HTTP response with the tested index.html. Nginx runs as
+   `nginx` on port 8080 and provides SPA route fallback. Server-side rendered Angular
+   applications need a suitable Node runtime Dockerfile and corresponding smoke test.
+6. Configure your test runner to write LCOV coverage and set
+   `sonar.javascript.lcov.reportPaths` to its actual path (default
+   `coverage/lcov.info`). The job retains coverage/ as an artifact. Adjust
+   `sonar.sources` and tsconfig paths for your workspace layout.
+7. Select a Node release supported by your Angular version in the default image.
+   The example pins Node 22.23.2; consult
+   [Angular's compatibility table](https://angular.dev/reference/versions) before
+   changing the image. Application dependencies are never upgraded by this CI.
+
+### Configure the Runner and external services
+
+Use a dedicated **project Runner**, tagged `ossf-security`, locked to the project,
+with untagged jobs disabled and access restricted to protected refs. The workflow
+runs only on the protected default branch. Use a native AMD64 Docker Runner for
+GitLab's official analyzers; an ARM64 Runner requires binfmt/QEMU emulation, which
+is outside their supported native architecture. The installation scripts do not
+register project Runners or create application projects automatically.
+
+The relevant Runner settings are:
+
+```toml
+concurrent = 1
+[[runners]]
+  executor = "docker"
+  limit = 1
+  [runners.docker]
+    privileged = true
+    volumes = ["/certs/client", "/cache"]
+```
+
+Register the Runner with its GitLab-issued authentication token through the normal
+Runner registration flow. Docker-in-Docker uses TLS on port 2376. Run trusted code
+on this privileged Runner and do not mount the host Docker socket. Provide enough
+RAM/disk for the services, scanner caches and image archives. Increase the project's
+maximum artifact size if the image exceeds GitLab's configured limit.
+
+Create a private SonarQube project, a DefectDojo product and a Nexus raw hosted
+repository for the application. Give the Sonar CI identity Browse and Execute
+Analysis on its project; also give the human reviewer Browse. Inspect inherited
+global and project-group grants. Give the non-administrator Dojo identity access
+to its product, and the Nexus publisher browse/read/add/edit only on its repository.
+Use Nexus `ALLOW_ONCE` for immutable publications. Complete Nexus onboarding and
+review/accept its license as administrator before attempting uploads.
+
+Create these **protected** GitLab project variables under Settings > CI/CD > Variables:
+
+| Variable | Example/purpose | Secret to mask |
+| --- | --- | --- |
+| `SONAR_HOST_URL` | `https://sonar.example.com` | No |
+| `SONAR_PROJECT_KEY` | Application's private Sonar project key | No |
+| `SONAR_TOKEN` | Dedicated CI identity's token, able to analyze and export results | Yes |
+| `DEFECTDOJO_URL` | `https://dojo.example.com` | No |
+| `DEFECTDOJO_PRODUCT_ID` | Numeric ID of the application's product | No |
+| `DEFECTDOJO_TOKEN` | Non-administrator product identity's API token | Yes |
+| `NEXUS_URL` | `https://nexus.example.com` | No |
+| `NEXUS_REPOSITORY` | Raw hosted repository name, e.g. `application-releases` | No |
+| `NEXUS_USER` | Dedicated publisher login | No |
+| `NEXUS_PASSWORD` | Publisher password | Yes |
+| `DD_MIN_SEVERITY` | `High` by default | No |
+
+URLs must be HTTP(S) origins without API paths, credentials, queries or fragments.
+Use HTTPS for shared environments. Keep administrator credentials and Runner tokens
+out of application repositories and CI variables. Configure separate Sonar project
+keys for separate apps/branches; Community Build analyzes one branch per project.
+The analysis job serializes access and verifies the analyzed commit and analysis ID.
+
+### Understand the release decision and retrieve artifacts
+
+Validate the integrated YAML in GitLab's Pipeline Editor/CI Lint, push to the
+protected default branch and open Build > Pipelines. Inspect each job's log and
+artifacts. A successful scanner job means it executed successfully, not that the
+application is free of findings. The barrier requires all eight reports and
+completed synchronous DefectDojo imports in a distinct engagement per CI run.
+
+Publication is refused for any active finding at or above `DD_MIN_SEVERITY`, any
+pip-audit/npm audit finding, any unknown severity, an incomplete/missing report,
+an API error or a Sonar quality gate other than `OK`. Unverified and duplicate
+findings count conservatively. Dependency-Check JSON/XML inventories must agree;
+for Angular, OWASP's npm inventory must also cover the application SBOM identities.
+OWASP uses the official NVD data feed with a cache; OSS Index enrichment is disabled
+because it requires separate credentials. Angular's Node Audit analyzer remains
+active and has access to the installed modules next to the lock file.
+
+A refused release retains `reports/gate-summary.json` in the barrier job and skips
+publish_nexus. Review the engagement in DefectDojo and address or triage the results;
+do not treat missing/failed scans as clean reports. On success, approval.json binds
+the commit/pipeline and artifact hashes. The publisher verifies the approved bytes,
+uploads them and reads them back to check the stored SHA-256.
+
+Nexus receives `image.tar`, `application-sbom.cdx.json`, `gl-sbom-report.cdx.json`
+and `approval.json` under `<project-id>/<commit>/<pipeline-id>/`. This is a raw image
+archive repository, rather than a Docker registry. Require approval.json, uploaded
+last, when consuming a release. Retry partial publications with a new pipeline ID
+because existing paths are immutable. Download image.tar and run `docker load -i
+image.tar` to load the approved image. Deploy it separately with runtime configuration.
+
+The outer Docker archive is not gzipped: GitLab's analyzer repeatedly reads archive
+metadata, and additional gzip decompression can make that path very slow. The same
+image is scanned and published. No build occurs after approval.
+
+### Check the generic helpers locally
+
+```sh
+python3 -m venv /tmp/ci-policy-tests
+/tmp/ci-policy-tests/bin/pip install requests==2.34.2
+/tmp/ci-policy-tests/bin/python -m unittest discover \
+  -s samples-gitlab-ci/security -p 'test_*.py'
+```
+
+These tests validate the shared policy and publisher contracts. Each consuming
+application must validate its own test command, dependencies, Docker image,
+service connectivity and complete pipeline before enabling releases.
+
+The generic templates passed the installed GitLab 19.4 compiler and the 22 shared
+policy tests. Both Dockerfiles also passed HTTP and non-root runtime smoke checks
+using disposable, generic fixtures. This does not replace a full pipeline run
+against the consuming application's code and external services.
 
 ## Validation
 

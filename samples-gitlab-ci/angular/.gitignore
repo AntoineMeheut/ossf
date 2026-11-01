@@ -1,0 +1,14 @@
+node_modules/
+.angular/
+.npm/
+.sonar-tools/
+.scannerwork/
+dist/
+reports/
+gl-*.json
+*.env
+.DS_Store
+.ci-dist/
+.cache/
+.odc-input/
+coverage/

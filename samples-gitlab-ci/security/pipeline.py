@@ -7,7 +7,7 @@ import re
 import subprocess
 import sys
 import time
-from urllib.parse import urljoin, urlparse
+from urllib.parse import unquote, urljoin, urlparse
 from xml.etree import ElementTree
 
 import requests
@@ -27,9 +27,11 @@ SEVERITIES = ("Critical", "High", "Medium", "Low", "Info")
 
 
 def reports():
-    if os.environ.get("OSSF_PROFILE", "django") == "surfnews":
-        return tuple(("reports/composer-audit.json", "Composer Audit Scan", "advisories")
+    if os.environ.get("OSSF_PROFILE") == "angular":
+        return tuple(("reports/npm-audit.json", "NPM Audit v7+ Scan", "vulnerabilities")
                      if item[0] == "reports/pip-audit.json" else item for item in REPORTS)
+    if os.environ.get("OSSF_PROFILE", "django") != "django":
+        raise ValueError("OSSF_PROFILE must be django or angular")
     return REPORTS
 
 
@@ -91,13 +93,18 @@ def validate_reports():
         if filename.endswith("dependency-check-report.xml"):
             data = read_json("reports/dependency-check-report.json")
             validate_dependency_check(data)
+            if os.environ.get("OSSF_PROFILE") == "angular":
+                validate_npm_dependency_inventory(data)
             root = ElementTree.parse(filename).getroot()
             dependencies = root.find("{*}dependencies")
             if root.tag.split("}")[-1] != "analysis" or dependencies is None or len(dependencies) != len(data["dependencies"]):
                 raise ValueError("Dependency-Check XML and JSON inventories do not match")
             continue
         data = read_json(filename)
-        expected_type = (dict, list) if key == "advisories" else (list,)
+        if filename == "reports/npm-audit.json":
+            validate_npm_audit(data)
+            continue
+        expected_type = list
         if not isinstance(data, dict) or not isinstance(data.get(key), expected_type):
             raise ValueError(f"Missing/invalid report payload: {filename} ({key})")
         if key == "vulnerabilities" and data.get("scan", {}).get("status") != "success":
@@ -117,9 +124,42 @@ def validate_dependency_check(data):
         raise ValueError("Dependency-Check inventory is empty or analysis was incomplete")
 
 
+def validate_npm_audit(data):
+    if not isinstance(data, dict) or data.get("error") or data.get("auditReportVersion") != 2:
+        raise ValueError("npm audit failed or returned an unsupported report")
+    vulnerabilities = data.get("vulnerabilities")
+    metadata = data.get("metadata", {})
+    counts = metadata.get("vulnerabilities", {})
+    if (not isinstance(vulnerabilities, dict) or not metadata.get("dependencies", {}).get("total")
+            or counts.get("total") != len(vulnerabilities)
+            or any(v.get("severity") not in ("info", "low", "moderate", "high", "critical")
+                   for v in vulnerabilities.values())):
+        raise ValueError("npm audit inventory/counts/severities are incomplete")
+
+
+def validate_npm_dependency_inventory(data):
+    # A lock file without sibling node_modules produced only a placeholder in a
+    # real run. Require every npm identity from the installed-app SBOM in ODC.
+    def purls(value):
+        if isinstance(value, str) and value.startswith("pkg:npm/"):
+            return {unquote(value).split("?", 1)[0].split("#", 1)[0]}
+        if isinstance(value, dict):
+            return set().union(set(), *(purls(item) for item in value.values()))
+        if isinstance(value, list):
+            return set().union(set(), *(purls(item) for item in value))
+        return set()
+    expected = purls(read_json("reports/application-sbom.cdx.json").get("components", []))
+    actual = purls(data["dependencies"])
+    if not expected or not expected.issubset(actual):
+        raise ValueError(f"Dependency-Check npm inventory incomplete: {len(expected - actual)} SBOM identities missing")
+
+
 def audit():
+    site_packages = subprocess.check_output(
+        [".venv/bin/python", "-c", "import sysconfig; print(sysconfig.get_path('purelib'))"], text=True,
+    ).strip()
     result = subprocess.run(
-        [".tools/bin/pip-audit", "--path", ".venv/lib/python3.14/site-packages", "--format", "json", "--output", "reports/pip-audit.json"],
+        [".tools/bin/pip-audit", "--path", site_packages, "--format", "json", "--output", "reports/pip-audit.json"],
         check=False,
     )
     data = read_json("reports/pip-audit.json")
@@ -242,14 +282,13 @@ def gate():
     blocked = sum(counts[name] for name in SEVERITIES[:SEVERITIES.index(threshold) + 1])
     unknown_severities = sum(
         finding.get("severity") not in SEVERITIES
-        for filename, _, key in reports() if key == "vulnerabilities"
+        for filename, _, key in reports() if key == "vulnerabilities" and filename.startswith("gl-")
         for finding in read_json(filename)[key]
     )
     # pip-audit does not supply CVSS severity for every advisory. Never allow an
     # advisory merely because the importer assigned it a lower/default severity.
-    if os.environ.get("OSSF_PROFILE", "django") == "surfnews":
-        advisories = read_json("reports/composer-audit.json")["advisories"]
-        dependency_findings = sum(len(value) for value in advisories.values()) if isinstance(advisories, dict) else len(advisories)
+    if os.environ.get("OSSF_PROFILE") == "angular":
+        dependency_findings = len(read_json("reports/npm-audit.json")["vulnerabilities"])
     else:
         dependency_findings = sum(len(item.get("vulns", [])) for item in read_json("reports/pip-audit.json")["dependencies"])
     summary = {"engagement": engagement, "tests": imported, "counts": counts, "threshold": threshold,

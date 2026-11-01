@@ -20,6 +20,9 @@ default:
   timeout: 30m
 
 variables:
+  OSSF_PROFILE: django
+  DJANGO_WSGI_MODULE: "config.wsgi:application"
+  DJANGO_SMOKE_PATH: "/health/"
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
   GIT_DEPTH: "0"
   DD_MIN_SEVERITY: High
@@ -177,14 +180,14 @@ build_container:
   script:
     - docker info
     - export APP_IMAGE="$CI_PROJECT_PATH_SLUG:$CI_COMMIT_SHA"
-    - docker build --pull --label "org.opencontainers.image.revision=$CI_COMMIT_SHA" -t "$APP_IMAGE" .
+    - docker build --pull --build-arg DJANGO_WSGI_MODULE="$DJANGO_WSGI_MODULE" --label "org.opencontainers.image.revision=$CI_COMMIT_SHA" -t "$APP_IMAGE" .
     - export SMOKE_SECRET="$(head -c 48 /dev/urandom | base64 | tr -d '\n')"
-    - docker run -d --name smoke -e DJANGO_SECRET_KEY="$SMOKE_SECRET" "$APP_IMAGE"
+    - docker run -d --name smoke -e DJANGO_SECRET_KEY="$SMOKE_SECRET" -e DJANGO_SMOKE_PATH="$DJANGO_SMOKE_PATH" "$APP_IMAGE"
     - trap 'docker rm -f smoke >/dev/null 2>&1 || true' EXIT
     - |
       ready=false
       for attempt in $(seq 1 30); do
-        if docker exec smoke python -c 'import urllib.request; assert urllib.request.urlopen("http://127.0.0.1:8000/health/").status == 200'; then
+        if docker exec smoke python -c 'import os, urllib.request; assert urllib.request.urlopen("http://127.0.0.1:8000" + os.environ["DJANGO_SMOKE_PATH"]).status == 200'; then
           ready=true
           break
         fi

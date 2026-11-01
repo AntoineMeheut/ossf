@@ -1,5 +1,9 @@
 # Docker validation — 2026-09-27
 
+This is a historical installer validation record. Its CI-related entries describe
+the retired legacy templates; they do not certify a consuming application's
+current Django or Angular pipeline.
+
 ## Shared configuration update
 
 The configuration refactor was exercised with the real Ubuntu 26.04 ARM64
@@ -29,9 +33,8 @@ Static/error tests also passed: private-file permissions, generation without
 replacement, unique generated secrets, missing files, unknown/duplicate keys,
 literal command-substitution text (never executed), URL/properties escaping,
 changed saved-credential rejection, CLI validation and APT failure propagation.
-ShellCheck 0.11.0 and Bash/YAML/XML syntax checks passed. Maven 3.9.16 successfully
-resolved a dummy `CI_JOB_TOKEN` through the new `ci_settings.xml`; no registry
-publication was performed.
+ShellCheck 0.11.0 and Bash/YAML/XML syntax checks passed. The then-current Maven
+example resolved a dummy job token without publishing to a registry.
 
 The final DefectDojo rerun and output checks used the same assertions directly in
 its retained test container. The remaining installation runs used `run.sh`.
@@ -71,7 +74,7 @@ was restored to 262144 after stopping SonarQube.
   incorrect SHA-256, missing Docker and mismatched existing SonarQube/Nexus markers.
 - A simulated APT exit code 23 propagated through the Docker, Nexus, GitLab and
   SonarQube installers without falsely reporting success.
-- All four CI examples parsed as YAML with valid script structures and were
+- The four then-current CI examples parsed as YAML with valid script structures and were
   accepted by **GitLab 19.4.1's `Gitlab::Ci::YamlProcessor`**, including logical
   configuration validation.
 - Official CI image manifests were checked. Native ARM containers executed

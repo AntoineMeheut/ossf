@@ -59,6 +59,11 @@ class GateTests(unittest.TestCase):
         with patch.object(p, "API", return_value=self.api):
             p.gate()
 
+    def npm_inventory(self):
+        purl = "pkg:npm/example@1"
+        p.write_json("reports/application-sbom.cdx.json", {"bomFormat": "CycloneDX", "components": [{"purl": purl}]})
+        p.write_json("reports/dependency-check-report.json", {"dependencies": [{"packages": [{"id": purl}]}]})
+
     def test_complete_clean_scan_approves_exact_artifact(self):
         self.run_gate()
         approval = p.read_json("reports/approval.json")
@@ -121,12 +126,53 @@ class GateTests(unittest.TestCase):
             self.run_gate()
         self.assertFalse(Path("reports/approval.json").exists())
 
-    def test_composer_profile_requires_its_own_audit(self):
-        with patch.dict(os.environ, {"OSSF_PROFILE": "surfnews"}):
+    def test_unknown_profile_is_rejected(self):
+        with patch.dict(os.environ, {"OSSF_PROFILE": "unsupported"}):
+            with self.assertRaises(ValueError):
+                self.run_gate()
+            self.api.json.assert_not_called()
+
+    def test_angular_profile_requires_npm7_report_and_importer(self):
+        self.npm_inventory()
+        with patch.dict(os.environ, {"OSSF_PROFILE": "angular"}):
             with self.assertRaises(OSError):
                 self.run_gate()
-            p.write_json("reports/composer-audit.json", {"advisories": {}})
+            p.write_json("reports/npm-audit.json", {"auditReportVersion": 2, "vulnerabilities": {},
+                         "metadata": {"dependencies": {"total": 1}, "vulnerabilities": {"total": 0}}})
             self.run_gate()
+            imports = [call.kwargs["data"]["scan_type"] for call in self.api.json.call_args_list
+                       if call.args[1] == "/api/v2/import-scan/"]
+            self.assertIn("NPM Audit v7+ Scan", imports)
+
+    def test_npm_transport_error_is_not_a_clean_audit(self):
+        with self.assertRaises(ValueError):
+            p.validate_npm_audit({"auditReportVersion": 2, "vulnerabilities": {}, "error": {"code": "ENOTFOUND"}})
+
+    def test_npm_count_mismatch_or_unknown_severity_blocks(self):
+        data = {"auditReportVersion": 2, "vulnerabilities": {},
+                "metadata": {"dependencies": {"total": 1}, "vulnerabilities": {"total": 1}}}
+        with self.assertRaises(ValueError):
+            p.validate_npm_audit(data)
+        data["vulnerabilities"] = {"example": {"severity": "unknown"}}
+        with self.assertRaises(ValueError):
+            p.validate_npm_audit(data)
+
+    def test_npm_low_advisory_still_blocks_release(self):
+        self.npm_inventory()
+        with patch.dict(os.environ, {"OSSF_PROFILE": "angular"}):
+            p.write_json("reports/npm-audit.json", {"auditReportVersion": 2,
+                         "vulnerabilities": {"example": {"severity": "low"}},
+                         "metadata": {"dependencies": {"total": 1}, "vulnerabilities": {"total": 1}}})
+            with self.assertRaises(ValueError):
+                self.run_gate()
+            self.assertEqual(p.read_json("reports/gate-summary.json")["dependency_advisories"], 1)
+            self.assertFalse(Path("reports/approval.json").exists())
+
+    def test_npm_placeholder_inventory_cannot_pass_as_complete(self):
+        self.npm_inventory()
+        p.write_json("reports/dependency-check-report.json", {"dependencies": [{"fileName": "package-lock.json"}]})
+        with self.assertRaisesRegex(ValueError, "inventory incomplete"):
+            p.validate_npm_dependency_inventory(p.read_json("reports/dependency-check-report.json"))
 
     def test_tampered_artifact_is_never_uploaded(self):
         self.run_gate()

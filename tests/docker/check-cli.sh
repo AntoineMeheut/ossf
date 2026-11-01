@@ -43,14 +43,12 @@ done
 test ! -e /etc/ossf
 echo 'PASS: ShellCheck, Bash syntax, help, invalid input, root and systemd checks.'
 
-# Parse YAML/XML locally; full GitLab validation lives in check-gitlab-ci.rb.
+# Parse YAML locally; full GitLab validation lives in check-gitlab-ci.rb.
 # Also check script types: an incorrectly quoted YAML colon can create a dictionary.
 python3 - <<'PYTHON'
 from pathlib import Path
 import yaml
-import xml.etree.ElementTree as ET
-ET.parse("samples-gitlab-ci/ci_settings.xml")
-for path in Path("samples-gitlab-ci").glob("*.yml"):
+for path in Path("samples-gitlab-ci").rglob("*.yml"):
     config = yaml.safe_load(path.read_text())
     assert isinstance(config, dict), path
     for name, job in config.items():

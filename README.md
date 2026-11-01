@@ -208,6 +208,10 @@ SHA-256 and uses Nexus's bundled Java runtime. The application runs under the
 installer replaces its generated initial password with `NEXUS_ADMIN_PASSWORD`
 and verifies administrator authentication.
 
+Complete Nexus Community Edition's first-use onboarding, including reviewing and
+accepting its license, before publishing artifacts. Readiness and authentication
+checks do not accept the license; writes remain blocked until that step is done.
+
 ## Credentials and repeated runs
 
 `config/ossf.env` is the source of truth for deployment credentials. GitLab receives
@@ -265,8 +269,9 @@ application upgrade command.
 
 ## GitLab CI examples
 
-Copy one file from `samples-gitlab-ci/` to a project's `.gitlab-ci.yml` and adapt
-it to that project:
+For the original Audit examples, copy one file from `samples-gitlab-ci/` to a
+project's `.gitlab-ci.yml` and adapt it. Prepare the complete Django or Surfnews
+overlay using the linked setup guide:
 
 | Example | Runtime | Project prerequisites |
 | --- | --- | --- |
@@ -274,6 +279,8 @@ it to that project:
 | `AuditMaven.gitlab-ci.yml` | Maven 3.9.16, Temurin JDK 25 | Compatible `pom.xml`; `ci_settings.xml` and a deployment repository on the default branch |
 | `AuditNpm.gitlab-ci.yml` | Node.js 26.10.0 | Scoped npm package and package registry access |
 | `AuditPython.gitlab-ci.yml` | Python 3.14.7 | Package with test extras, tox `py`/`ruff` environments, Sphinx docs for Pages |
+| [Django security CI](samples-gitlab-ci/django/.gitlab-ci.yml) | Django/Python, Docker Runner | [Setup and release policy](samples-gitlab-ci/security/README.md); protected service tokens |
+| [Surfnews security CI](samples-gitlab-ci/surfnews/.gitlab-ci.yml) | Existing Drupal/PHP/Composer application | Same security chain, adapted to the supplied Surfnews source |
 
 CI jobs use GitLab's **temporary job credentials**, which cannot be generated
 in advance by the installation configuration:
@@ -293,9 +300,11 @@ Do not upload the infrastructure administrator configuration to CI jobs. Runner
 registration still uses an authentication token issued by GitLab after creating
 a runner; registration is not performed by the installation script.
 
-The examples build, test or publish application artifacts. They do not yet wire
-SonarQube, vulnerability scanners, SBOM generation or DefectDojo report imports
-together. Implement those jobs and configure their tokens for your own projects.
+The four original Audit examples build, test or publish application artifacts.
+The new [security examples](samples-gitlab-ci/security/README.md) connect the GitLab
+scanners, ecosystem dependency audits, OWASP Dependency-Check, SonarQube, CycloneDX,
+DefectDojo and Nexus. They use explicit CE-compatible alternatives to Ultimate-only
+Dependency Scanning and publish only after the release policy accepts all results.
 The Python deployment job is a placeholder to replace before enabling production
 deployment.
 

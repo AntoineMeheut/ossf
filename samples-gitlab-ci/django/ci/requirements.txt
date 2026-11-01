@@ -1,0 +1,4 @@
+coverage==7.17.0
+cyclonedx-bom==7.6.0
+pip-audit==2.10.1
+requests==2.34.2

@@ -1,0 +1,12 @@
+.venv/
+.tools/
+.cache/
+.scannerwork/
+__pycache__/
+*.pyc
+.coverage
+coverage.xml
+reports/
+dist/
+wheelhouse/
+.env

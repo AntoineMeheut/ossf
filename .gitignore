@@ -192,3 +192,4 @@ Thumbs.db
 # Keep config/ossf.env.example in Git to document variables without their secrets.
 /config/ossf.env
 /config/.ossf-config.*
+/config/ci-*.env

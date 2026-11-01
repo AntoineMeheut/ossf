@@ -1,0 +1,7 @@
+*
+!requirements.txt
+!manage.py
+!surfnews/
+!surfnews/*.py
+!news/
+!news/*.py
